@@ -63,9 +63,8 @@ public enum ShellLaunch {
             // sees a different ZDOTDIR.
             if let existing = env["ZDOTDIR"] { env["REWARP_USER_ZDOTDIR"] = existing }
             env["ZDOTDIR"] = integration.appendingPathComponent("zsh").path
-            // Removed from the environment by the script too, so commands never see it.
+            // Never in the environment. The shell asks for it through TokenHandoff.
             token = UUID().uuidString
-            env["REWARP_TOKEN"] = token
         }
 
         // A leading dash in argv[0] is how a shell learns it is a login shell.

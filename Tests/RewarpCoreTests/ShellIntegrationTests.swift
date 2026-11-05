@@ -8,7 +8,7 @@ private final class Fixture {
     let home: URL
     let session: PaneSession
 
-    init(zshrc: String = "") throws {
+    init(zshrc: String = "", shellScript: String? = nil) throws {
         home = FileManager.default.temporaryDirectory.appendingPathComponent("rewarp-test-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         try zshrc.write(to: home.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
@@ -16,11 +16,20 @@ private final class Fixture {
         session = PaneSession(cols: 80, rows: 24, cellWidth: 10, cellHeight: 20, theme: .dusk,
                               workingDirectory: home.path)
 
+        var shell = "/bin/zsh"
+        if let shellScript {
+            // Named zsh, so it's launched exactly as a real one would be.
+            let script = home.appendingPathComponent("zsh")
+            try "#!/bin/sh\n\(shellScript)\n".write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+            shell = script.path
+        }
+
         let repo = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let environment = ["HOME": home.path, "PATH": "/usr/bin:/bin", "USER": "test"]
         let launch = ShellLaunch.login(
-            workingDirectory: home.path, shell: "/bin/zsh", environment: environment,
+            workingDirectory: home.path, shell: shell, environment: environment,
             integrationDirectory: repo.appendingPathComponent("resources/shell-integration"))
         try session.start(launch: launch)
     }
@@ -55,6 +64,24 @@ private final class Fixture {
         session.lock.lock()
         defer { session.lock.unlock() }
         return block.terminal.plainText()
+    }
+}
+
+@Suite("Token handoff")
+struct TokenHandoffTests {
+    @Test("A directory that can't hold the socket falls through to the next")
+    func fallsThroughToADirectoryThatWorks() throws {
+        // A shell that can't reach this has no blocks at all, so one bad TMPDIR can't be fatal.
+        let usable = NSTemporaryDirectory()
+        let tooLong = "/tmp/" + String(repeating: "x", count: 200)
+        let handoff = try #require(TokenHandoff(directories: ["/no/such/directory", tooLong, usable]))
+        #expect(handoff.path.hasPrefix(usable))
+        #expect(FileManager.default.fileExists(atPath: handoff.path))
+    }
+
+    @Test("With nowhere to put the socket there's no handoff")
+    func nowhereToGo() {
+        #expect(TokenHandoff(directories: ["/no/such/directory"]) == nil)
     }
 }
 
@@ -99,6 +126,115 @@ struct ZshIntegrationTests {
         let fixture = try Fixture()
         let block = try fixture.run("env | grep -c REWARP", block: 0)
         #expect(fixture.text(of: block) == "0")
+    }
+
+    @Test("exec zsh gets back to blocks")
+    func execZsh() throws {
+        let fixture = try Fixture(zshrc: "export FROM_ZSHRC=yes")
+        let replaced = try fixture.run("exec zsh", block: 0)
+        #expect(replaced.command == "exec zsh")
+        let block = try fixture.run("echo $FROM_ZSHRC", block: 1)
+        #expect(fixture.text(of: block) == "yes")
+        #expect(block.exitCode == 0)
+    }
+
+    @Test("exec by full path gets back to blocks, as with exec $SHELL")
+    func execByPath() throws {
+        let fixture = try Fixture()
+        _ = try fixture.run("exec /bin/zsh", block: 0)
+        let block = try fixture.run("echo after", block: 1)
+        #expect(fixture.text(of: block) == "after")
+    }
+
+    @Test("omz reload gets back to blocks every time, and stays a login shell")
+    func omzReload() throws {
+        // What oh-my-zsh runs. A pane's shell takes the login branch.
+        let fixture = try Fixture(zshrc: #"""
+            reload() {
+              local zsh="$ZSH_ARGZERO"
+              [[ "${zsh#-}" != /* ]] && (( $+commands[zsh] )) && zsh="zsh"
+              [[ "$zsh" = -* || -o login ]] && exec -l "${zsh#-}" || exec "$zsh"
+            }
+            """#)
+        _ = try fixture.run("reload", block: 0)
+        _ = try fixture.run("reload", block: 1)
+        let block = try fixture.run("[[ -o login ]] && echo login", block: 2)
+        #expect(fixture.text(of: block) == "login")
+    }
+
+    @Test("Commands in the replacement shell can't see the token either")
+    func tokenStaysInTheReplacementShell() throws {
+        let fixture = try Fixture()
+        _ = try fixture.run("exec zsh", block: 0)
+        let block = try fixture.run("env | grep -c -E 'REWARP|ZDOTDIR'", block: 1)
+        #expect(fixture.text(of: block) == "0")
+    }
+
+    @Test("A program started with exec doesn't inherit the token")
+    func execHandsOverNoToken() throws {
+        let fixture = try Fixture()
+        // In a subshell, because the pane's shell would be gone otherwise.
+        let block = try fixture.run("(exec env) | grep -c TOKEN", block: 0)
+        #expect(fixture.text(of: block) == "0")
+    }
+
+    @Test("A command that asks for the token gets nothing")
+    func commandsCantAskForTheToken() throws {
+        let fixture = try Fixture()
+        try fixture.wait("the prompt") { $0.phase == .ready }
+        let path = try #require(fixture.session.tokenHandoff?.path)
+        let block = try fixture.run(
+            #"zsh -fc 'zmodload zsh/net/socket; zsocket "\#(path)" && read -t 2 -u $REPLY reply; print -r -- "[$reply]"'"#,
+            block: 0)
+        #expect(fixture.text(of: block) == "[]")
+    }
+
+    @Test("The token is nowhere in what the shell is started with")
+    func launchCarriesNoToken() throws {
+        // The value, not a name, so that this holds whatever carries it. A command can
+        // read a shell's starting environment through `ps -E`, on any zsh that isn't
+        // hardened as /bin/zsh is, so it's never there to be read.
+        let fixture = try Fixture(shellScript: #"env > "$HOME/started.tmp"; mv "$HOME/started.tmp" "$HOME/started""#)
+        let started = fixture.home.appendingPathComponent("started")
+        try fixture.wait("the shell to start") { _ in FileManager.default.fileExists(atPath: started.path) }
+
+        let environment = try String(contentsOf: started, encoding: .utf8)
+        let token = try #require(fixture.session.reportToken)
+        #expect(environment.contains("REWARP_SOCKET="))
+        #expect(!environment.contains(token))
+    }
+
+    @Test("exec zsh finds the same startup files it would without Rewarp")
+    func execKeepsTheUsersZdotdir() throws {
+        let fixture = try Fixture(zshrc: "FROM=home")
+        let config = fixture.home.appendingPathComponent("config")
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try "FROM=config".write(to: config.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
+
+        _ = try fixture.run("export ZDOTDIR=$HOME/config; exec zsh", block: 0)
+        let exported = try fixture.run("echo $FROM:${ZDOTDIR:t}", block: 1)
+        #expect(fixture.text(of: exported) == "config:config")
+
+        // A ZDOTDIR that isn't exported never reaches a new shell.
+        _ = try fixture.run("typeset +x ZDOTDIR; exec zsh", block: 2)
+        let private_ = try fixture.run("echo $FROM:${ZDOTDIR:t}", block: 3)
+        #expect(fixture.text(of: private_) == "home:")
+    }
+
+    @Test("exec can still change the shell's own file descriptors")
+    func execRedirection() throws {
+        let fixture = try Fixture()
+        _ = try fixture.run("exec 3>&1", block: 0)
+        let block = try fixture.run(#"echo kept >&3; echo "${ZDOTDIR:-unset}""#, block: 1)
+        #expect(fixture.text(of: block) == "kept\nunset")
+    }
+
+    @Test("A shell that exec starts in a subshell stays a plain nested shell")
+    func execInASubshell() throws {
+        let fixture = try Fixture()
+        // Not the pane's own process, so it mustn't be given the token.
+        let block = try fixture.run(#"(exec zsh -ic 'echo "[$_rewarp_token]"')"#, block: 0)
+        #expect(fixture.text(of: block) == "[]")
     }
 
     @Test("Commands submitted before the prompt all run, in order")

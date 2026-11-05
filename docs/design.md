@@ -142,8 +142,31 @@ Those reports don't use OSC 133 and OSC 7, the standard way to send them, becaus
 anything printed to the terminal could send those too: a file being read, a
 background job at the prompt, or a remote shell with its own integration. They go
 on a private OSC 7701 channel instead, each quoting a token made fresh for each
-shell. The token reaches the shell through the environment, and the script moves it
-to a shell variable straight away, so commands never inherit it.
+shell.
+
+The token never goes through the environment. Removing it there straight away isn't
+enough, because a command can read a shell's starting environment through `ps -E` on
+any zsh without Apple's hardening, such as Homebrew's. So the shell asks the app for
+it over a Unix socket as it starts, and keeps it in a shell variable, where commands
+can't inherit it. The kernel tells the app which process connected (`LOCAL_PEERPID`),
+and it answers only the pane's own process. A command has a pid of its own, so it
+gets no answer, even one that goes looking.
+
+A shell with no token sends no reports, so the pane ends up a plain terminal, as it
+does for a shell with no integration. That's why the socket falls back from `TMPDIR`
+to the system's temporary directory and then to `/tmp`: a `TMPDIR` inherited from
+wherever the app was launched can be gone, or too long for a socket path.
+
+`exec zsh`, which `omz reload` runs, starts a new shell in the same process, and that
+shell needs both the hooks and the token again. `exec` keeps the pid, so it asks for
+the token the same way. The hooks are harder. They're found through `ZDOTDIR`, and
+leaving that exported would send installers that write to `${ZDOTDIR:-$HOME}/.zshrc`
+into the app. zsh runs no hook before `exec`, so `exec` is an alias that sets
+`ZDOTDIR` and the socket's path for the one process it starts. A function wouldn't do:
+one called `exec` would undo `exec 3>&1` when it returned, and one called `zsh` would
+lose the `-l` of `exec -l zsh`. The alias is defined before the user's startup files,
+because an alias only reaches functions parsed after it, and `omz reload` is one. The
+token can't go in the alias, because `exec` could be starting anything.
 
 Readiness comes from wrapping `zle-line-init`, not from a marker in `PS1`, because
 prompt themes rewrite `PS1` and oh-my-posh runs the whole line edit inside its own
@@ -314,8 +337,17 @@ its code. `CNF` lists places where the docs disagree with each other.
 
 ## Known limits
 
-- `exec zsh`, which `omz reload` runs, replaces the shell with one that has no hooks.
-  The pane keeps working, but as one block that never finishes.
+- The integration only survives an `exec` that its alias can see. `builtin exec zsh`,
+  `exec -c zsh`, `exec zsh -f` and an `exec` parsed before the alias existed all leave
+  a shell with no hooks. The pane keeps working, but as one block that never finishes,
+  the same as any nested shell.
+- The alias can't see what `exec` is starting, so a program other than zsh inherits
+  the app's `ZDOTDIR`. Any zsh started under it puts that back. A bare `exec`, which
+  does nothing, leaves the alias's variables set in the shell.
+- A zsh built without the `zsh/net/socket` module can't ask for its token, so its
+  panes are plain terminals. `/bin/zsh` and Homebrew's zsh both have it.
+- A pane's socket stays in the temporary directory if the app quits with the pane
+  open. It's empty, and macOS clears that directory by itself.
 - A pane closes when the PTY reaches end of file, so a background job holding the
   terminal keeps a pane open after its shell exits.
 - Find and filter do their work on the main thread under the session lock, so they
@@ -370,6 +402,8 @@ latency, and Warp itself, which can't be scripted without writing into `~/.warp`
 - macOS 14 or later as the minimum, for the modern display link APIs.
 - A private channel with a token for shell reports, not the standard OSC 133 and
   OSC 7.
+- An alias on `exec`, which shows up in the user's `alias` list, because nothing else
+  keeps the hooks through `exec zsh` without leaving `ZDOTDIR` exported.
 - Startup output stays hidden unless the shell seems to be waiting for an answer.
 - `-Ounchecked` in release builds, because bounds checks are the wrong trade in a
   per-cell render loop.

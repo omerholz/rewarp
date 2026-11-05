@@ -85,6 +85,8 @@ public final class PaneSession {
     /// by something else: a file being read, a background job at the prompt, or a
     /// remote shell with an integration of its own. Nil means no reports are expected.
     var reportToken: String?
+    /// How the shell gets `reportToken`, which it never inherits.
+    private(set) var tokenHandoff: TokenHandoff?
     /// How long a program can hold drawing back, so one that never releases its
     /// hold can't freeze the pane.
     private static let maximumRenderHold: Double = 1
@@ -115,12 +117,18 @@ public final class PaneSession {
     // MARK: Process
 
     public func start(launch: PTYProcess.Launch) throws {
+        var launch = launch
         expectsIntegration = launch.hasIntegration
         reportToken = launch.integrationToken
+        if launch.hasIntegration, let handoff = TokenHandoff() {
+            tokenHandoff = handoff
+            launch.environment["REWARP_SOCKET"] = handoff.path
+        }
         let process = try PTYProcess(
             launch: launch, cols: cols, rows: rows,
             widthPx: cols * cellWidth, heightPx: rows * cellHeight)
         self.process = process
+        if let reportToken { tokenHandoff?.serve(token: reportToken, shell: process.pid) }
         refreshBranch(for: workingDirectory)
         process.start(
             // Weak, because a pane can close while its shell is still printing.
@@ -163,6 +171,8 @@ public final class PaneSession {
     private func processExited(_ status: Int32) {
         lock.lock()
         phase = .exited
+        // The pid is free to go to something else now.
+        tokenHandoff = nil
         lock.unlock()
         post(.exited(status: status))
     }
