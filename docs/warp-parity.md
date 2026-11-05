@@ -499,7 +499,7 @@ Coverage so far, from docs, changelog and blog. `D` means documented, `P` partly
 - [ ] MOU-089 Dragging a tab out to empty space opens it in a new window, keeping its session, panes and state. (terminal/windows/tabs)
 - [ ] MOU-090 Dragging a tab onto another window's bar moves it there. (terminal/windows/tabs)
 - [ ] MOU-091 Cross-window drag must not split tab groups, must work with pinned tabs, and must not crash when entering full screen. (changelog/2026.06.24; changelog/2026.07.09)
-- [ ] MOU-092 Tabs must never stick mid-drag. (changelog/2025.02.12)
+- [x] MOU-092 Tabs must never stick mid-drag. (changelog/2025.02.12)
 - [ ] MOU-093 `⌘`-click adds or removes a tab from a multi-selection. (terminal/windows/tabs)
 - [ ] MOU-094 `Shift`-click selects every tab between it and the active tab. (terminal/windows/tabs)
 - [ ] MOU-095 The active tab is always part of a tab selection. (terminal/windows/tabs)

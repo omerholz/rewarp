@@ -10,13 +10,19 @@ enum TabBarPosition: String {
 
     private static let key = "tabBarPosition"
 
+    /// An automated run remembers the position for itself, not in the user's settings.
+    private static var automated = TabBarPosition.top
+
     static var saved: TabBarPosition {
         get {
-            guard !DebugScript.isAutomated else { return .top }
+            guard !DebugScript.isAutomated else { return automated }
             return UserDefaults.standard.string(forKey: key).flatMap(TabBarPosition.init) ?? .top
         }
         set {
-            guard !DebugScript.isAutomated else { return }
+            guard !DebugScript.isAutomated else {
+                automated = newValue
+                return
+            }
             UserDefaults.standard.set(newValue.rawValue, forKey: key)
         }
     }
@@ -37,8 +43,22 @@ final class TabBarView: NSView, NSTextFieldDelegate {
     private static let minimumTabWidth: CGFloat = 96
     private static let newTabWidth: CGFloat = 34
     private static let resizeMargin: CGFloat = 4
+    /// How far the pointer travels before a press on a tab becomes a drag, so that
+    /// a click with a slight wobble stays a click.
+    private static let dragThreshold: CGFloat = 4
+    private static let slideDuration: CFTimeInterval = 0.16
 
-    var items: [Item] = [] { didSet { needsDisplay = true } }
+    var items: [Item] = [] {
+        didSet {
+            // A tab can close mid-drag, when its shell exits. What's being dragged
+            // may be gone, so nothing about the drag can be trusted any more.
+            if items.count != oldValue.count {
+                drag = nil
+                slides.removeAll()
+            }
+            needsDisplay = true
+        }
+    }
     var selected = 0 { didSet { needsDisplay = true } }
     var palette = ChromePalette(theme: .dusk) { didSet { needsDisplay = true } }
     var position = TabBarPosition.top {
@@ -58,9 +78,24 @@ final class TabBarView: NSView, NSTextFieldDelegate {
     var onResizeSidebar: ((CGFloat) -> Void)?
     var makeMenu: ((Int) -> NSMenu)?
 
+    /// A tab held by the pointer. Order changes as it travels, so `index` is always
+    /// where it would land.
+    private struct TabDrag {
+        var index: Int
+        let pressedAt: NSPoint
+        /// From the tab's leading edge to the pointer, so the tab doesn't jump.
+        let grab: CGFloat
+        /// Where the tab's leading edge is, along the bar.
+        var leadingEdge: CGFloat
+        var isMoving = false
+    }
+
     private var hovered: Int?
     private var hoveringClose = false
-    private var dragging: Int?
+    private var drag: TabDrag?
+    /// How far each tab is from its slot, as tabs glide into place.
+    private var slides: [Int: CGFloat] = [:]
+    private var slideTimer: Timer?
     private var isResizing = false
     private var renameField: NSTextField?
     private var renamingIndex: Int?
@@ -69,6 +104,16 @@ final class TabBarView: NSView, NSTextFieldDelegate {
 
     /// Clicking a tab from another app should act on that tab.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    /// Takes this view out of the title bar's drag area, so a real press on a tab
+    /// doesn't also move the window. `mouseDownCanMoveWindow` and `isOpaque` have no
+    /// effect on it there, and this private method is the only thing that does. AppKit
+    /// calls it, and nothing here does. Without it the tabs would still work with events
+    /// sent to the window directly, so `test_a_press_in_the_tab_bar_never_moves_the_window`
+    /// reads the area AppKit computed. Empty space still moves the window, through
+    /// `performDrag`.
+    @objc(_opaqueRectForWindowMoveWhenInTitlebar)
+    private func opaqueRectForWindowMove() -> NSRect { bounds }
 
     var isVertical: Bool { position != .top }
     var isRenaming: Bool { renamingIndex != nil }
@@ -97,9 +142,26 @@ final class TabBarView: NSView, NSTextFieldDelegate {
         return NSRect(x: leading + CGFloat(index) * tabWidth, y: 6, width: tabWidth, height: bounds.height - 6)
     }
 
+    private func closeRect(in tab: NSRect) -> NSRect {
+        NSRect(x: tab.maxX - 24, y: tab.midY - 8, width: 16, height: 16)
+    }
+
     private func closeRect(_ index: Int) -> NSRect {
-        let tab = tabRect(index)
-        return NSRect(x: tab.maxX - 24, y: tab.midY - 8, width: 16, height: 16)
+        closeRect(in: tabRect(index))
+    }
+
+    private var slotLength: CGFloat { isVertical ? Self.rowHeight : tabWidth }
+
+    private func along(_ point: NSPoint) -> CGFloat { isVertical ? point.y : point.x }
+
+    private func slotEdge(_ index: Int) -> CGFloat { along(tabRect(index).origin) }
+
+    /// Where a tab is drawn, which is its slot unless it's held or still gliding.
+    private func displayRect(_ index: Int) -> NSRect {
+        var offset = slides[index] ?? 0
+        if let drag, drag.isMoving, drag.index == index { offset = drag.leadingEdge - slotEdge(index) }
+        let rect = tabRect(index)
+        return isVertical ? rect.offsetBy(dx: 0, dy: offset) : rect.offsetBy(dx: offset, dy: 0)
     }
 
     private var newTabRect: NSRect {
@@ -132,7 +194,8 @@ final class TabBarView: NSView, NSTextFieldDelegate {
             ])
         }
 
-        for index in items.indices {
+        let held = drag.flatMap { $0.isMoving ? $0.index : nil }
+        for index in items.indices where index != held {
             if isVertical { drawRow(index) } else { drawTab(index) }
         }
 
@@ -145,10 +208,15 @@ final class TabBarView: NSView, NSTextFieldDelegate {
         plus.lineWidth = 1.3
         palette.secondaryText.setStroke()
         plus.stroke()
+
+        // Last, so that the held tab passes over the others.
+        if let held, items.indices.contains(held) {
+            if isVertical { drawRow(held) } else { drawTab(held) }
+        }
     }
 
-    private func drawClose(_ index: Int) {
-        let close = closeRect(index)
+    private func drawClose(_ index: Int, in tab: NSRect) {
+        let close = closeRect(in: tab)
         if index == hovered && hoveringClose {
             palette.hover.setFill()
             NSBezierPath(roundedRect: close, xRadius: 4, yRadius: 4).fill()
@@ -165,7 +233,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
     }
 
     private func drawTab(_ index: Int) {
-        let rect = tabRect(index)
+        let rect = displayRect(index)
         let isSelected = index == selected
         if isSelected || index == hovered {
             (isSelected ? palette.background : palette.hover).setFill()
@@ -186,11 +254,11 @@ final class TabBarView: NSView, NSTextFieldDelegate {
             .foregroundColor: isSelected ? palette.text : palette.secondaryText,
             .paragraphStyle: paragraph,
         ])
-        if showClose { drawClose(index) }
+        if showClose { drawClose(index, in: rect) }
     }
 
     private func drawRow(_ index: Int) {
-        let rect = tabRect(index)
+        let rect = displayRect(index)
         let isSelected = index == selected
         if isSelected || index == hovered {
             (isSelected ? palette.background : palette.hover).setFill()
@@ -217,7 +285,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
                     .paragraphStyle: paragraph,
                 ])
         }
-        if showClose { drawClose(index) }
+        if showClose { drawClose(index, in: rect) }
     }
 
     private func tabIndex(at point: NSPoint) -> Int? {
@@ -225,6 +293,13 @@ final class TabBarView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseMoved(with event: NSEvent) {
+        // Moving with no button down means the release went missing, and a tab
+        // must never stay stuck to the pointer.
+        endDrag()
+        updateHover(with: event)
+    }
+
+    private func updateHover(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         hovered = tabIndex(at: point)
         hoveringClose = hovered.map { closeRect($0).contains(point) } ?? false
@@ -250,7 +325,9 @@ final class TabBarView: NSView, NSTextFieldDelegate {
                 beginRename(index)
             } else {
                 onSelect?(index)
-                dragging = index
+                slides[index] = nil
+                drag = TabDrag(index: index, pressedAt: point, grab: along(point) - slotEdge(index),
+                               leadingEdge: slotEdge(index))
             }
         } else if isVertical {
             if event.clickCount == 2 { onNewTab?() }
@@ -268,17 +345,86 @@ final class TabBarView: NSView, NSTextFieldDelegate {
             onResizeSidebar?(width)
             return
         }
-        guard let source = dragging else { return }
+        guard var held = drag, !items.isEmpty else { return }
         let point = convert(event.locationInWindow, from: nil)
-        if let target = tabIndex(at: point), target != source {
-            onMove?(source, target)
-            dragging = target
+        if !held.isMoving {
+            guard hypot(point.x - held.pressedAt.x, point.y - held.pressedAt.y) >= Self.dragThreshold else { return }
+            held.isMoving = true
+            // The index stays put as tabs swap, so it would light up whichever tab slid into it.
+            hovered = nil
+            hoveringClose = false
         }
+
+        // Only the position along the bar counts, so the pointer can wander off it.
+        let first = slotEdge(0)
+        held.leadingEdge = min(max(along(point) - held.grab, first), slotEdge(items.count - 1))
+        let target = Int(((held.leadingEdge - first) / slotLength).rounded())
+
+        // One slot at a time, so that each tab passed over glides the right way.
+        while held.index != target {
+            let step = target > held.index ? 1 : -1
+            let next = held.index + step
+            slides[held.index] = (slides[next] ?? 0) + CGFloat(step) * slotLength
+            slides[next] = nil
+            onMove?(held.index, next)
+            held.index = next
+        }
+        drag = held
+        animateSlides()
+        needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
-        dragging = nil
         isResizing = false
+        endDrag()
+        updateHover(with: event)
+    }
+
+    /// The tab settles into its slot from wherever it was let go.
+    private func endDrag() {
+        guard let finished = drag else { return }
+        drag = nil
+        if finished.isMoving, items.indices.contains(finished.index) {
+            slides[finished.index] = finished.leadingEdge - slotEdge(finished.index)
+            animateSlides()
+        }
+        needsDisplay = true
+    }
+
+    /// A plain timer holding this view weakly, because a display link would keep the
+    /// window's views alive. The timer stops itself once every tab is in place.
+    private func animateSlides() {
+        guard !slides.isEmpty, slideTimer == nil else { return }
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            slides.removeAll()
+            return
+        }
+        var last = CACurrentMediaTime()
+        let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] timer in
+            guard let self else {
+                timer.invalidate()
+                return
+            }
+            let now = CACurrentMediaTime()
+            let remaining = CGFloat(pow(0.002, (now - last) / Self.slideDuration))
+            last = now
+            self.slides = self.slides.compactMapValues { abs($0 * remaining) < 0.5 ? nil : $0 * remaining }
+            self.needsDisplay = true
+            if self.slides.isEmpty {
+                timer.invalidate()
+                self.slideTimer = nil
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        slideTimer = timer
+    }
+
+    /// The held tab's frame in this view, while it's being dragged.
+    var debugHoveredTab: Int? { hovered }
+
+    var debugHeldTabFrame: NSRect? {
+        guard let drag, drag.isMoving, items.indices.contains(drag.index) else { return nil }
+        return displayRect(drag.index)
     }
 
     /// Middle click closes a tab.

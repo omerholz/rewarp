@@ -124,8 +124,16 @@ final class ControlChannel {
         case "setScale":
             pane()?.terminal.scaleForTesting = value(command["scale"])
             pane()?.terminal.viewDidChangeBackingProperties()
+        case "resizeWindow":
+            window()?.setContentSize(NSSize(width: value(command["width"]), height: value(command["height"])))
         case "closeWindow":
             window()?.close()
+        case "press":
+            mouse(.leftMouseDown, NSPoint(x: value(command["x"]), y: value(command["y"])), count: 1, mods: [])
+        case "dragTo":
+            mouse(.leftMouseDragged, NSPoint(x: value(command["x"]), y: value(command["y"])), count: 1, mods: [])
+        case "release":
+            mouse(.leftMouseUp, NSPoint(x: value(command["x"]), y: value(command["y"])), count: 1, mods: [])
         case "move":
             mouse(.mouseMoved, NSPoint(x: value(command["x"]), y: value(command["y"])), count: 0, mods: [])
         case "scroll":
@@ -264,6 +272,11 @@ final class ControlChannel {
             windowNumber: window.windowNumber, context: nil, eventNumber: nextEventNumber(), clickCount: count,
             pressure: 1) else { return }
         window.sendEvent(event)
+        // A real move reaches the tab bar through its tracking area, which needs a
+        // key window. This one is invisible, so it gets the event directly.
+        if type == .mouseMoved, let bar = window.contentView?.hitTest(event.locationInWindow) as? TabBarView {
+            bar.mouseMoved(with: event)
+        }
     }
 
     private func click(x: CGFloat, y: CGFloat, count: Int, mods: NSEvent.ModifierFlags, button: String) {
@@ -339,6 +352,9 @@ final class ControlChannel {
         state["selectedTab"] = controller()?.selectedTabIndex ?? 0
         state["tabPosition"] = controller()?.debugTabPosition ?? ""
         state["tabFrames"] = controller()?.debugTabFrames ?? []
+        state["heldTabFrame"] = controller()?.debugHeldTabFrame ?? NSNull()
+        state["hoveredTab"] = controller()?.debugHoveredTab ?? NSNull()
+        state["titleBarDragsWindow"] = controller()?.debugTitleBarDragsWindow ?? true
         state["renaming"] = controller()?.debugIsRenaming ?? false
         state["paletteOpen"] = controller()?.debugPaletteOpen ?? false
         state["paletteName"] = controller()?.debugPaletteName ?? ""

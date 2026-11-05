@@ -461,4 +461,23 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         }
     }
     var debugPaneCount: Int { activeTab?.panes.count ?? 0 }
+    /// Whether the window server would move this window for a press in the title bar.
+    /// This is what AppKit last told it, which is what a real mouse obeys, whatever a
+    /// view says about itself. An empty region is 12 bytes. A macOS without this private
+    /// property reports true, and the tab bar then needs checking with a real mouse.
+    var debugTitleBarDragsWindow: Bool {
+        let name = "_lastDragRegionData"
+        guard let window, window.responds(to: NSSelectorFromString(name)),
+              let region = window.value(forKey: name) as? Data else { return true }
+        return region.count > 12
+    }
+
+    var debugHoveredTab: Int? { tabBar.debugHoveredTab }
+
+    /// The tab being dragged, in points from the top-left of the window's content.
+    var debugHeldTabFrame: [CGFloat]? {
+        guard let content = window?.contentView, let frame = tabBar.debugHeldTabFrame else { return nil }
+        let rect = tabBar.convert(frame, to: content)
+        return [rect.minX, content.bounds.height - rect.maxY, rect.width, rect.height]
+    }
 }

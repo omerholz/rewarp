@@ -1,4 +1,6 @@
 """End-to-end checks of tabs. IDs refer to docs/warp-parity.md."""
+import time
+
 from harness import App
 
 
@@ -242,6 +244,155 @@ def test_moving_focus_out_of_a_zoomed_pane_shows_the_pane(app):
     state = app.key("]", "cmd")
     assert state["focus"] == "input"
     assert not state["paneHidden"]
+
+
+def three_tabs(app):
+    open_tabs(app, 3)
+    return name_tabs(app, ["a", "b", "c"])
+
+
+def settled_drag_area(app):
+    """Whether the title bar drags the window, once AppKit has caught up with a change."""
+    time.sleep(0.4)
+    return app.state()["titleBarDragsWindow"]
+
+
+def test_a_press_in_the_tab_bar_never_moves_the_window(app):
+    app.wait("the tab bar to keep presses", lambda s: not s["titleBarDragsWindow"])
+
+
+def test_a_resized_window_keeps_presses_on_the_tabs(app):
+    app.resize_window(1200, 760)
+    assert not settled_drag_area(app)
+    app.resize_window(800, 500)
+    assert not settled_drag_area(app)
+
+
+def test_a_window_opened_with_a_sidebar_keeps_presses_on_the_tabs_at_the_top(app):
+    app.menu("View", "Tab Bar on Left")
+    app.menu("File", "New Window")
+    assert settled_drag_area(app)
+    app.menu("View", "Tab Bar on Top")
+    assert not settled_drag_area(app)
+
+
+def test_a_dragged_tab_follows_the_pointer(app):
+    state = three_tabs(app)
+    frame = state["tabFrames"][0]
+    x, y = center(frame)
+    app.press(x, y)
+    held = app.drag_to(x + 30, y)["heldTabFrame"]
+    assert held[0] == frame[0] + 30
+    assert held[1] == frame[1]
+
+
+def test_the_order_changes_as_a_tab_passes_each_slot(app):
+    state = three_tabs(app)
+    width = state["tabFrames"][0][2]
+    x, y = center(state["tabFrames"][0])
+    app.press(x, y)
+    assert app.drag_to(x + width * 0.4, y)["tabTitles"] == ["a", "b", "c"]
+    assert app.drag_to(x + width * 0.6, y)["tabTitles"] == ["b", "a", "c"]
+    assert app.drag_to(x + width * 1.6, y)["tabTitles"] == ["b", "c", "a"]
+    assert app.drag_to(x + width * 0.4, y)["tabTitles"] == ["a", "b", "c"]
+
+
+def test_a_tab_can_jump_several_slots_in_one_move(app):
+    state = three_tabs(app)
+    x, y = center(state["tabFrames"][0])
+    x3, _ = center(state["tabFrames"][2])
+    app.press(x, y)
+    assert app.drag_to(x3, y)["tabTitles"] == ["b", "c", "a"]
+
+
+def test_a_tab_moved_aside_by_a_drag_does_not_look_hovered(app):
+    state = three_tabs(app)
+    frame = state["tabFrames"][0]
+    x, y = center(frame)
+    assert app.move(x, y)["hoveredTab"] == 0
+    app.press(x, y)
+    state = app.drag_to(x + frame[2], y)
+    assert state["tabTitles"] == ["b", "a", "c"]
+    assert state["hoveredTab"] is None
+    assert app.release(x + frame[2], y)["hoveredTab"] == 1
+
+
+def test_a_wobble_is_still_a_click(app):
+    state = three_tabs(app)
+    x, y = center(state["tabFrames"][1])
+    app.press(x, y)
+    held = app.drag_to(x + 2, y + 1)
+    assert held["heldTabFrame"] is None
+    released = app.release(x + 2, y + 1)
+    assert released["tabTitles"] == ["a", "b", "c"]
+    assert released["selectedTab"] == 1
+
+
+def test_a_held_tab_stays_inside_the_tabs(app):
+    state = three_tabs(app)
+    first, last = state["tabFrames"][0], state["tabFrames"][2]
+    x, y = center(state["tabFrames"][1])
+    app.press(x, y)
+    assert app.drag_to(-500, y)["heldTabFrame"][0] == first[0]
+    held = app.drag_to(5000, y)
+    assert held["heldTabFrame"][0] == last[0]
+    assert held["tabTitles"] == ["a", "c", "b"]
+
+
+def test_the_pointer_can_wander_off_the_bar_during_a_drag(app):
+    state = three_tabs(app)
+    x, y = center(state["tabFrames"][0])
+    x3, _ = center(state["tabFrames"][2])
+    app.press(x, y)
+    assert app.drag_to(x3, y + 400)["tabTitles"] == ["b", "c", "a"]
+
+
+def test_dropping_keeps_the_selected_tab_and_lets_go(app):
+    state = three_tabs(app)
+    x, y = center(state["tabFrames"][0])
+    x3, _ = center(state["tabFrames"][2])
+    app.press(x, y)
+    app.drag_to(x3, y)
+    released = app.release(x3, y)
+    assert released["heldTabFrame"] is None
+    assert released["tabTitles"] == ["b", "c", "a"]
+    assert released["selectedTab"] == 2
+    # The next drag starts afresh from wherever the tab landed.
+    x2, _ = center(released["tabFrames"][1])
+    app.press(x2, y)
+    assert app.drag_to(x2 - released["tabFrames"][0][2], y)["tabTitles"] == ["c", "b", "a"]
+
+
+def test_mou_092_a_lost_release_does_not_leave_a_tab_stuck(app):
+    state = three_tabs(app)
+    x, y = center(state["tabFrames"][0])
+    app.press(x, y)
+    assert app.drag_to(x + 30, y)["heldTabFrame"]
+    assert app.move(x + 30, y)["heldTabFrame"] is None
+
+
+def test_a_tab_closing_during_a_drag_ends_the_drag(app):
+    state = three_tabs(app)
+    x, y = center(state["tabFrames"][0])
+    app.press(x, y)
+    app.drag_to(x + 30, y)
+    closed = app.key("w", "cmd")
+    assert closed["tabs"] == 2
+    assert closed["heldTabFrame"] is None
+    assert app.drag_to(x + 200, y)["heldTabFrame"] is None
+    app.release(x + 200, y)
+
+
+def test_a_dragged_row_follows_the_pointer_in_the_sidebar(app):
+    state = three_tabs(app)
+    app.menu("View", "Tab Bar on Left")
+    state = app.state()
+    frame = state["tabFrames"][0]
+    x, y = center(frame)
+    app.press(x, y)
+    held = app.drag_to(x, y + 30)["heldTabFrame"]
+    assert held[1] == frame[1] + 30
+    assert app.drag_to(x, y + frame[3] * 1.6)["tabTitles"] == ["b", "c", "a"]
 
 
 def test_closing_a_window_frees_its_panes():

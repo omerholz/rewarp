@@ -122,6 +122,18 @@ class App:
     def drag(self, x1, y1, x2, y2, *mods):
         return self._command(cmd="drag", x1=x1, y1=y1, x2=x2, y2=y2, mods=list(mods))
 
+    def resize_window(self, width, height):
+        return self._command(cmd="resizeWindow", width=width, height=height)
+
+    def press(self, x, y):
+        return self._command(cmd="press", x=x, y=y)
+
+    def drag_to(self, x, y):
+        return self._command(cmd="dragTo", x=x, y=y)
+
+    def release(self, x, y):
+        return self._command(cmd="release", x=x, y=y)
+
     def move(self, x, y):
         return self._command(cmd="move", x=x, y=y)
 

@@ -215,7 +215,16 @@ never reparents a running pane, and the tree can be tested without any views and
 saved for session restore. Maximizing hides the other panes, which therefore can't
 hold keyboard focus.
 
-The tab bar sits on the top, left or right, and the choice is saved.
+The tab bar sits on the top, left or right, and the choice is saved. Dragging a tab
+reorders live: the tab follows the pointer, and the order changes as it passes each
+slot, so letting go only settles it. Dragging a tab out into a new window isn't
+built yet.
+
+The tab bar overlaps the title bar, which drags the window on its own, in the window
+server, whatever a view says through `mouseDownCanMoveWindow` or `isOpaque`. So the
+bar overrides the private `_opaqueRectForWindowMoveWhenInTitlebar`, the one thing that
+takes a view out of that drag area, and moves the window itself from empty space with
+`performDrag`. If a future macOS stops asking, tabs go back to moving the window.
 
 ### Input editor
 
@@ -272,16 +281,20 @@ zsh against the real integration scripts.
 
 End-to-end tests drive the real app through a control FIFO (`REWARP_CONTROL`). Input
 arrives as synthesized `NSEvent`s sent through the window, so it takes the same path
-as a user's, and each reply is a JSON snapshot of what a user would see. Windows stay
-invisible, and each run gets a private pasteboard. `REWARP_SHELL` picks another
-shell, to reach the plain terminal.
+as a user's inside the app but skips the window server, and each reply is a JSON
+snapshot of what a user would see. Windows stay invisible, and each run gets a
+private pasteboard. `REWARP_SHELL` picks another shell, to reach the plain terminal.
 
-Two rules came from getting these wrong:
+Three rules came from getting these wrong:
 
 - Scripted runs always use a throwaway `HOME`. A real shell can stop at a question,
-  as oh-my-zsh's update check does, and a script might answer it.
+  as oh-my-zsh's update check does, and a script might answer it. That doesn't cover
+  app settings, though: only `REWARP_CONTROL` keeps a run out of the real ones.
 - A regression test has to fail without its fix, so that gets checked by taking the
   fix out. Several tests here passed either way until they were rewritten.
+- Anything the window server decides needs a real mouse, or a test of what AppKit
+  computed, not of what a view reports. Tab dragging passed every test while most of
+  each tab moved the window. Its test now reads the window's actual drag area.
 
 ## Milestones
 
@@ -374,6 +387,8 @@ latency, and Warp itself, which can't be scripted without writing into `~/.warp`
 - `-Ounchecked` in release builds, because bounds checks are the wrong trade in a
   per-cell render loop.
 - GNU Make as the front door, since it ships with the Command Line Tools.
+- One private AppKit method overridden so tabs can be dragged. Rewarp only defines it,
+  so losing it brings back a bug, not a crash. App Store review might object to it.
 
 ## Going beyond Warp
 
