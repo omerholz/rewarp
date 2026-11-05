@@ -71,6 +71,29 @@ struct ZshIntegrationTests {
         #expect(block.exitCode == 1)
     }
 
+    @Test("A background job can't fake a command or move the session at the prompt")
+    func backgroundJobAtThePrompt() throws {
+        let fixture = try Fixture()
+        _ = try fixture.run(
+            #"(sleep 0.2; printf '\e]133;A\a\e]133;C;cmdline_url=fake\a\e]7;file:///etc\a') &"#, block: 0)
+        try fixture.wait("the prompt") { $0.phase == .ready }
+        let directory = fixture.session.currentDirectory
+        usleep(500_000)
+        try fixture.wait("the prompt") { $0.phase == .ready }
+        #expect(fixture.session.blocks.count == 1)
+        #expect(fixture.session.currentDirectory == directory)
+    }
+
+    @Test("The working directory follows cd, through a space and a quote")
+    func directoryReport() throws {
+        let fixture = try Fixture()
+        let name = "it's a dir"
+        try FileManager.default.createDirectory(at: fixture.home.appendingPathComponent(name),
+                                                 withIntermediateDirectories: true)
+        _ = try fixture.run(#"cd "it's a dir""#, block: 0)
+        try fixture.wait("the report") { $0.workingDirectory.hasSuffix("/" + name) }
+    }
+
     @Test("Commands can't see the token that proves a report came from the shell")
     func tokenStaysInTheShell() throws {
         let fixture = try Fixture()

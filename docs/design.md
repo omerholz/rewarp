@@ -56,7 +56,7 @@ host to own the PTY. Blocks need the host to own the stream and the layout.
 | Need | API |
 | --- | --- |
 | Parse the stream, hold screen state | `ghostty_terminal_*` |
-| Know where commands start and end | `GHOSTTY_TERMINAL_OPT_SEMANTIC_PROMPT` (OSC 133) |
+| Hear from the shell | `GHOSTTY_TERMINAL_OPT_UNKNOWN_SEQUENCE` (a private OSC) |
 | Split the stream on exact boundaries | `ghostty_terminal_vt_write_until` |
 | Draw efficiently | `render.h`: dirty rows, stable row ids, overscan, split begin/end update |
 | Avoid half-drawn TUI frames | `GHOSTTY_TERMINAL_OPT_RENDER_HOLD` (mode 2026) |
@@ -116,23 +116,22 @@ Costs of this choice, and how they are handled:
 ### Stream routing
 
 The router feeds PTY bytes with `vt_write_until`, stopping at each OSC end. When
-the semantic prompt callback reports output start, later bytes go to a new block
-terminal. On command end they return to the shell terminal. The split is exact
+the shell reports that a command started, later bytes go to a new block terminal. On command end they return to the shell terminal. The split is exact
 even when one read holds the end of a command and the next prompt.
 
 ### Shell integration
 
 Rewarp starts the shell with its own bootstrap, which sources the user's config and
 then installs hooks. Only zsh is done, through `ZDOTDIR`. Bash and fish will use
-`--rcfile` and `XDG_DATA_DIRS`. Hooks emit OSC 133 with the command text and exit
-code, plus OSC 7 for the working directory.
+`--rcfile` and `XDG_DATA_DIRS`. Hooks report prompts, command text, exit codes and
+the working directory.
 
-OSC 133 is only believed between commands. While a command runs, the stream is
-that command's, so a file it prints or a remote shell with its own integration
-could say anything. The end of a command is instead reported on a private OSC 7701
-channel, quoting a token made fresh for each shell. The token reaches the shell
-through the environment, and the script moves it to a shell variable straight away,
-so commands never inherit it.
+Those reports don't use OSC 133 and OSC 7, the standard way to send them, because
+anything printed to the terminal could send those too: a file being read, a
+background job at the prompt, or a remote shell with its own integration. They go
+on a private OSC 7701 channel instead, each quoting a token made fresh for each
+shell. The token reaches the shell through the environment, and the script moves it
+to a shell variable straight away, so commands never inherit it.
 
 Readiness comes from wrapping `zle-line-init`, not from a marker in `PS1`, because
 prompt themes rewrite `PS1` and oh-my-posh runs the whole line edit inside its own

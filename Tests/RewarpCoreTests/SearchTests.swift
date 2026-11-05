@@ -134,7 +134,8 @@ struct BlockFilterTests {
     @Test("Filtering doesn't touch the block, and keeps colours")
     func keepsOutput() throws {
         let session = PaneSession(cols: 40, rows: 10, cellWidth: 10, cellHeight: 20, theme: .dusk, workingDirectory: "/tmp")
-        let text = "\u{1b}]133;C\u{07}one\r\n\u{1b}[31mtwo\u{1b}[0m\r\nthree\r\n\u{1b}]133;D;0\u{07}"
+        session.reportToken = "token"
+        let text = "\u{1b}]7701;start=token;x\u{07}one\r\n\u{1b}[31mtwo\u{1b}[0m\r\nthree\r\n\u{1b}]7701;done=token;0\u{07}"
         Array(text.utf8).withUnsafeBytes { session.ingest($0) }
         let block = try #require(session.blocks.first)
 

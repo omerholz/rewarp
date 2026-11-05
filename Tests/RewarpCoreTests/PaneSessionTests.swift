@@ -6,15 +6,29 @@ private let bel = "\u{07}"
 private let st = "\u{1b}\\"
 
 private func makeSession() -> PaneSession {
-    PaneSession(cols: 80, rows: 24, cellWidth: 10, cellHeight: 20, theme: .dusk, workingDirectory: "/tmp")
+    let session = PaneSession(cols: 80, rows: 24, cellWidth: 10, cellHeight: 20, theme: .dusk, workingDirectory: "/tmp")
+    session.reportToken = "token"
+    return session
 }
 
 private func feed(_ session: PaneSession, _ text: String) {
     Array(text.utf8).withUnsafeBytes { session.ingest($0) }
 }
 
+/// A report as the shell integration sends it.
+private func report(_ key: String, _ value: String = "", terminator: String = bel) -> String {
+    "\u{1b}]7701;\(key)=token;\(value)\(terminator)"
+}
+
+private let promptStart = report("prompt")
+private let inputStart = report("ready")
+
 private func cmd(_ line: String, terminator: String = bel) -> String {
-    "\u{1b}]133;C;cmdline_url=\(line.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)\(terminator)"
+    report("start", line.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!, terminator: terminator)
+}
+
+private func done(_ code: Int, terminator: String = bel) -> String {
+    report("done", String(code), terminator: terminator)
 }
 
 @Suite("Stream router")
@@ -31,9 +45,9 @@ struct RouterTests {
     @Test("Output lands in the block and the prompt stays out of it")
     func outputGoesToBlock() {
         let session = makeSession()
-        feed(session, "\u{1b}]133;A\(bel)$ \u{1b}]133;B\(bel)")
+        feed(session, "\(promptStart)$ \(inputStart)")
         #expect(session.phase == .ready)
-        feed(session, "ls\r\n\(cmd("ls"))file-a\r\nfile-b\r\n\u{1b}]133;D;0\(bel)\u{1b}]133;A\(bel)$ ")
+        feed(session, "ls\r\n\(cmd("ls"))file-a\r\nfile-b\r\n\(done(0))\(promptStart)$ ")
 
         #expect(session.blocks.count == 1)
         let block = session.blocks[0]
@@ -47,7 +61,7 @@ struct RouterTests {
     @Test("A non-zero exit marks the block as failed")
     func failure() {
         let session = makeSession()
-        feed(session, "\(cmd("false"))\u{1b}]133;D;1\(bel)")
+        feed(session, "\(cmd("false"))\(done(1))")
         #expect(session.blocks[0].exitCode == 1)
         #expect(session.blocks[0].didFail)
     }
@@ -55,8 +69,8 @@ struct RouterTests {
     @Test("Each command gets its own grid, so clearing one spares the others")
     func clearIsContained() {
         let session = makeSession()
-        feed(session, "\(cmd("one"))first\u{1b}]133;D;0\(bel)")
-        feed(session, "\(cmd("clear"))\u{1b}[3J\u{1b}[H\u{1b}[2Jgone\u{1b}]133;D;0\(bel)")
+        feed(session, "\(cmd("one"))first\(done(0))")
+        feed(session, "\(cmd("clear"))\u{1b}[3J\u{1b}[H\u{1b}[2Jgone\(done(0))")
         #expect(session.blocks.count == 2)
         #expect(session.blocks[0].terminal.plainText() == "first")
         #expect(session.blocks[1].terminal.plainText() == "gone")
@@ -64,7 +78,7 @@ struct RouterTests {
 
     @Test("A read split at any byte gives the same result")
     func splitAtEveryByte() {
-        let stream = Array("\u{1b}]133;A\(bel)$ \u{1b}]133;B\(bel)\(cmd("ls"))one\r\ntwo\u{1b}]133;D;3\(bel)\u{1b}]133;A\(bel)$ ".utf8)
+        let stream = Array("\(promptStart)$ \(inputStart)\(cmd("ls"))one\r\ntwo\(done(3))\(promptStart)$ ".utf8)
         for split in 1..<stream.count {
             let session = makeSession()
             stream[..<split].withUnsafeBytes { session.ingest($0) }
@@ -78,7 +92,7 @@ struct RouterTests {
     @Test("ESC-backslash terminators leave no stray backslash in the next grid")
     func stringTerminatorInOneRead() {
         let session = makeSession()
-        feed(session, "\(cmd("ls", terminator: st))out\u{1b}]133;D;0\(st)after")
+        feed(session, "\(cmd("ls", terminator: st))out\(done(0, terminator: st))after")
         #expect(session.blocks[0].terminal.plainText() == "out")
         #expect(session.shell.plainText() == "after")
     }
@@ -86,7 +100,7 @@ struct RouterTests {
     @Test("A terminator split across reads leaves no stray backslash either")
     func stringTerminatorAcrossReads() {
         let session = makeSession()
-        feed(session, "\(cmd("ls", terminator: st))out\u{1b}]133;D;0\u{1b}")
+        feed(session, "\(cmd("ls", terminator: st))out\(done(0, terminator: "\u{1b}"))")
         feed(session, "\\after")
         #expect(session.blocks[0].terminal.plainText() == "out")
         #expect(session.shell.plainText() == "after")
@@ -95,7 +109,7 @@ struct RouterTests {
     @Test("A prompt without a command end still closes the running block")
     func promptClosesBlock() {
         let session = makeSession()
-        feed(session, "\(cmd("sleep"))\u{1b}]133;A\(bel)$ ")
+        feed(session, "\(cmd("sleep"))\(promptStart)$ ")
         #expect(session.blocks[0].isRunning == false)
         #expect(session.blocks[0].exitCode == nil)
         #expect(session.phase == .prompt)
@@ -126,7 +140,7 @@ struct RouterTests {
         let session = makeSession()
         session.submit(command: "ls")
         #expect(session.phase == .plain)
-        feed(session, "\u{1b}]133;A\(bel)$ \u{1b}]133;B\(bel)")
+        feed(session, "\(promptStart)$ \(inputStart)")
         #expect(session.phase == .ready)
     }
 }
@@ -172,23 +186,53 @@ struct EncodingTests {
         }
     }
 
-    @Test("With a token, only the shell can end a block")
-    func outputCannotEndItsOwnBlock() {
-        let session = PaneSession(cols: 80, rows: 24, cellWidth: 10, cellHeight: 20, theme: .dusk, workingDirectory: "/")
-        session.commandToken = "secret"
-        feed(session, "\u{1b}]133;A\u{07}\u{1b}]133;B\u{07}\u{1b}]133;C;cmdline_url=real\u{07}before\r\n")
-        #expect(session.phase == .running)
-
-        feed(session, "\u{1b}]133;D;0\u{07}\u{1b}]133;A\u{07}\u{1b}]133;B\u{07}\u{1b}]133;C;cmdline_url=fake\u{07}")
-        feed(session, "\u{1b}]7701;done=guess;0\u{07}\u{1b}]7701;path=/evil\u{07}still here\r\n")
+    @Test("OSC 133 and OSC 7 mean nothing, because anything can print them")
+    func standardMarksAreIgnored() {
+        let session = makeSession()
+        feed(session, "\(promptStart)\(inputStart)\(cmd("real"))before\r\n")
+        feed(session, "\u{1b}]133;D;0\(bel)\u{1b}]133;A\(bel)\u{1b}]133;C;cmdline_url=fake\(bel)\u{1b}]7;file:///etc\(bel)")
         #expect(session.phase == .running)
         #expect(session.blocks.count == 1)
-        #expect(session.shellPath == nil)
-        #expect(session.blocks[0].outputText.contains("still here"))
+        #expect(session.workingDirectory == "/tmp")
+    }
 
-        feed(session, "\u{1b}]7701;done=secret;3\u{07}")
+    @Test("A report without the token changes nothing, at the prompt or during a command")
+    func reportsNeedTheToken() {
+        let session = makeSession()
+        func forged(_ key: String, _ value: String) -> String { "\u{1b}]7701;\(key)=guess;\(value)\(bel)" }
+        let forgeries = forged("start", "fake") + forged("prompt", "") + forged("cwd", "/etc")
+            + forged("path", "/evil") + forged("names", "evil") + forged("done", "0")
+
+        feed(session, "\(promptStart)\(inputStart)\(forgeries)")
+        #expect(session.phase == .ready)
+        #expect(session.blocks.isEmpty)
+
+        feed(session, "\(cmd("real"))before\r\n\(forgeries)still here\r\n")
+        #expect(session.phase == .running)
+        #expect(session.blocks.count == 1)
+        #expect(session.blocks[0].outputText.contains("still here"))
+        #expect(session.workingDirectory == "/tmp")
+        #expect(session.shellPath == nil)
+        #expect(session.shellNames.isEmpty)
+
+        feed(session, done(3))
         #expect(session.phase == .prompt)
         #expect(session.blocks[0].exitCode == 3)
+    }
+
+    @Test("A shell without integration has nothing to report")
+    func noReportsWithoutIntegration() {
+        let session = PaneSession(cols: 80, rows: 24, cellWidth: 10, cellHeight: 20, theme: .dusk, workingDirectory: "/tmp")
+        feed(session, "\(promptStart)\(inputStart)\(cmd("fake"))\u{1b}]133;A\(bel)")
+        #expect(session.phase == .plain)
+        #expect(session.blocks.isEmpty)
+    }
+
+    @Test("Without integration, the shell terminal's OSC 7 still moves the session")
+    func plainShellDirectory() {
+        let session = PaneSession(cols: 80, rows: 24, cellWidth: 10, cellHeight: 20, theme: .dusk, workingDirectory: "/tmp")
+        feed(session, "\u{1b}]7;file://host/usr/local\(bel)")
+        #expect(session.workingDirectory == "/usr/local")
     }
 
 }

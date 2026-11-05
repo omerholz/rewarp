@@ -20,7 +20,7 @@ public enum SessionEvent {
 
 /// One pane's shell: a PTY, the terminals it feeds, and the router between them.
 ///
-/// Bytes from the PTY go to the shell terminal until OSC 133 reports that a
+/// Bytes from the PTY go to the shell terminal until the shell reports that a
 /// command started. They then go to a new terminal owned by that command's block
 /// until the command ends.
 ///
@@ -81,13 +81,10 @@ public final class PaneSession {
     /// Whether the shell was started with integration, so reports are on the way.
     private(set) var expectsIntegration = false
     private var showsStartup = false
-    /// Whether OSC 133 can mean anything. A shell started without integration has
-    /// nothing reporting, so whatever arrives was printed by something else.
-    private var acceptsPromptMarks = true
-    /// What the shell has to quote to end a command. While a command runs the
-    /// stream is the command's own, so anything it prints could look like a report,
-    /// including from a remote shell with its own integration. Nil accepts any report.
-    var commandToken: String?
+    /// What the shell quotes in its reports. Everything in the stream can be printed
+    /// by something else: a file being read, a background job at the prompt, or a
+    /// remote shell with an integration of its own. Nil means no reports are expected.
+    var reportToken: String?
     /// How long a program can hold drawing back, so one that never releases its
     /// hold can't freeze the pane.
     private static let maximumRenderHold: Double = 1
@@ -119,8 +116,7 @@ public final class PaneSession {
 
     public func start(launch: PTYProcess.Launch) throws {
         expectsIntegration = launch.hasIntegration
-        commandToken = launch.integrationToken
-        acceptsPromptMarks = launch.hasIntegration
+        reportToken = launch.integrationToken
         let process = try PTYProcess(
             launch: launch, cols: cols, rows: rows,
             widthPx: cols * cellWidth, heightPx: rows * cellHeight)
@@ -538,7 +534,6 @@ public final class PaneSession {
         set(GHOSTTY_TERMINAL_OPT_XTVERSION, unsafeBitCast(xtversionCallback, to: UnsafeRawPointer.self))
         set(GHOSTTY_TERMINAL_OPT_COLOR_SCHEME, unsafeBitCast(colorSchemeCallback, to: UnsafeRawPointer.self))
         set(GHOSTTY_TERMINAL_OPT_RENDER_HOLD, unsafeBitCast(renderHoldCallback, to: UnsafeRawPointer.self))
-        set(GHOSTTY_TERMINAL_OPT_SEMANTIC_PROMPT, unsafeBitCast(semanticPromptCallback, to: UnsafeRawPointer.self))
         var limit = 128
         _ = ghostty_terminal_set(handle, GHOSTTY_TERMINAL_OPT_UNKNOWN_MAX_BYTES, &limit)
         set(GHOSTTY_TERMINAL_OPT_UNKNOWN_SEQUENCE, unsafeBitCast(unknownSequenceCallback, to: UnsafeRawPointer.self))
@@ -549,40 +544,25 @@ public final class PaneSession {
         pendingWrites.append(Array(bytes))
     }
 
-    fileprivate func handleSemanticPrompt(_ event: GhosttyTerminalSemanticPrompt) {
-        guard acceptsPromptMarks, phase != .running || commandToken == nil else { return }
-        switch event.kind {
-        case GHOSTTY_SEMANTIC_PROMPT_PROMPT_START:
-            pendingEvents.append(.promptStart)
-        case GHOSTTY_SEMANTIC_PROMPT_INPUT_START:
-            pendingEvents.append(.inputStart)
-        case GHOSTTY_SEMANTIC_PROMPT_OUTPUT_START:
-            pendingEvents.append(.outputStart(command: event.command.swiftString))
-        case GHOSTTY_SEMANTIC_PROMPT_COMMAND_END:
-            pendingEvents.append(.commandEnd(exitCode: event.has_exit_code ? event.exit_code : nil))
-        default:
-            break
-        }
-    }
-
-    /// The private `7701;key=value` channel from the shell integration. A command's
-    /// output can reach this too, so only the shell terminal is believed, apart from
-    /// `done`, which proves itself with the token.
-    fileprivate func handleReport(_ content: String, from terminal: GhosttyTerminal?) {
-        guard content.hasPrefix("7701;"), let equals = content.firstIndex(of: "=") else { return }
+    /// The private `7701;key=token;value` channel from the shell integration. This is
+    /// how the shell says everything, because only a report quoting the token can be
+    /// trusted to come from it.
+    fileprivate func handleReport(_ content: String) {
+        guard let reportToken, content.hasPrefix("7701;"), let equals = content.firstIndex(of: "=") else { return }
         let key = content[content.index(content.startIndex, offsetBy: 5)..<equals]
-        let value = String(content[content.index(after: equals)...]).removingPercentEncoding ?? ""
-        if key == "done" {
-            let fields = value.split(separator: ";")
-            guard let commandToken, fields.count == 2, fields[0] == commandToken else { return }
-            pendingEvents.append(.commandEnd(exitCode: Int32(fields[1])))
-            return
-        }
-        guard terminal == shell.handle else { return }
+        let fields = content[content.index(after: equals)...]
+            .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
+        guard fields.count == 2, fields[0] == reportToken else { return }
+        let value = String(fields[1]).removingPercentEncoding ?? ""
         switch key {
         case "hello": integrationAnnounced = true
         case "path": shellPath = value
         case "names": shellNames = value.split(separator: " ").map(String.init)
+        case "cwd": changeDirectory(to: value)
+        case "prompt": pendingEvents.append(.promptStart)
+        case "ready": pendingEvents.append(.inputStart)
+        case "start": pendingEvents.append(.outputStart(command: value))
+        case "done": pendingEvents.append(.commandEnd(exitCode: Int32(value)))
         default: break
         }
     }
@@ -592,9 +572,14 @@ public final class PaneSession {
         post(.titleChanged(target.title))
     }
 
+    /// For shells without integration, whose prompt may send OSC 7 itself. A program's
+    /// own never counts: over ssh, it names a directory on another machine.
     fileprivate func handlePwdChanged(_ terminal: GhosttyTerminal?) {
-        guard terminal == target.handle else { return }
-        let path = Self.path(fromPwd: target.pwd)
+        guard reportToken == nil, terminal == shell.handle else { return }
+        changeDirectory(to: Self.path(fromPwd: shell.pwd))
+    }
+
+    private func changeDirectory(to path: String) {
         workingDirectory = path
         post(.workingDirectoryChanged(path))
         refreshBranch(for: path)
@@ -710,12 +695,8 @@ private let renderHoldCallback: GhosttyTerminalRenderHoldFn = { _, userdata, hel
     session(userdata).handleRenderHold(held)
 }
 
-private let unknownSequenceCallback: GhosttyTerminalUnknownSequenceFn = { terminal, userdata, sequence in
+private let unknownSequenceCallback: GhosttyTerminalUnknownSequenceFn = { _, userdata, sequence in
     guard let sequence, sequence.pointee.tag == GHOSTTY_TERMINAL_UNKNOWN_SEQUENCE_OSC else { return }
-    session(userdata).handleReport(sequence.pointee.value.osc.content.swiftString, from: terminal)
+    session(userdata).handleReport(sequence.pointee.value.osc.content.swiftString)
 }
 
-private let semanticPromptCallback: GhosttyTerminalSemanticPromptFn = { _, userdata, event in
-    guard let event else { return }
-    session(userdata).handleSemanticPrompt(event.pointee)
-}
