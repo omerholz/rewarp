@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+vendor/
+dist/
+Sources/CGhosttyVT/include/ghostty/
+.DS_Store
+__pycache__/
