@@ -209,7 +209,8 @@ control, such as a cloned repository.
 ### Stack
 
 Swift 5 language mode, AppKit, SwiftPM. `scripts/` builds the pinned libghostty-vt
-as a static library and assembles an ad-hoc-signed `.app`. Tests use Swift Testing.
+as a static library and assembles an ad-hoc-signed `.app`, and the `Makefile` is the
+front door to all of it. Tests use Swift Testing.
 
 No Xcode should be needed: Zig plus the Command Line Tools should be enough, as
 the XCFramework and `metal` steps of Ghostty's build are avoidable here. To be

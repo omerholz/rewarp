@@ -641,7 +641,7 @@ private func session(_ userdata: UnsafeMutableRawPointer?) -> PaneSession {
     Unmanaged<PaneSession>.fromOpaque(userdata!).takeUnretainedValue()
 }
 
-private let versionString = strdup("Rewarp 0.1")!
+private let versionString = strdup("Rewarp \(RewarpVersion.string)")!
 
 private let writePtyCallback: GhosttyTerminalWritePtyFn = { _, userdata, data, len in
     guard let data else { return }

@@ -54,7 +54,7 @@ public enum ShellLaunch {
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["TERM_PROGRAM"] = "Rewarp"
-        env["TERM_PROGRAM_VERSION"] = "0.1"
+        env["TERM_PROGRAM_VERSION"] = RewarpVersion.string
         if env["LANG"] == nil { env["LANG"] = "en_US.UTF-8" }
 
         var token: String?
