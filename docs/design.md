@@ -17,7 +17,7 @@ without asking".
 - Warp's core experience: command blocks, an IDE-style input editor, command
   palette, tabs and splits, with Warp's default keyboard shortcuts.
 - Speed is a feature with a number on it. Throughput is benchmarked against the
-  Ghostty.app and Warp.app installed on this machine.
+  installed Ghostty.app. Warp is the other comparison, and hasn't been measured yet.
 - Well-behaved under agent workloads: heavy streaming, and full-redraw TUIs
   running on the primary screen.
 - Anything that works in a normal terminal still works here, including vim,
@@ -51,7 +51,7 @@ also rules itself out on the merits: a surface owns its PTY and renderer, and
 exposes no way to feed it bytes or read its grid. Warp's input editor needs the
 host to own the PTY. Blocks need the host to own the stream and the layout.
 
-`libghostty-vt` provides what Rewarp needs:
+`libghostty-vt` provides what Rewarp needs. In use today:
 
 | Need | API |
 | --- | --- |
@@ -60,11 +60,18 @@ host to own the PTY. Blocks need the host to own the stream and the layout.
 | Split the stream on exact boundaries | `ghostty_terminal_vt_write_until` |
 | Draw efficiently | `render.h`: dirty rows, stable row ids, overscan, split begin/end update |
 | Avoid half-drawn TUI frames | `GHOSTTY_TERMINAL_OPT_RENDER_HOLD` (mode 2026) |
-| Encode input | `key.h`, `mouse.h`, `paste.h`, `focus.h` |
-| Selection, find | `selection.h`, `search.h` |
+| Encode input | `key.h`, `mouse.h`, `paste.h` |
+| Select text | `selection.h` |
+| Measure characters | `unicode.h` |
+
+Available for what's still to come:
+
+| Need | API |
+| --- | --- |
 | Keep memory down | `ghostty_terminal_compress` |
 | Session restore | `snapshot.h` |
 | Inline images | `kitty_graphics.h` |
+| Tell programs about focus | `focus.h` |
 
 The cost is that Rewarp writes its own renderer and does not inherit Ghostty's.
 libghostty-vt has no tagged release and its C API is still moving, so Rewarp pins
@@ -116,8 +123,13 @@ Costs of this choice, and how they are handled:
 ### Stream routing
 
 The router feeds PTY bytes with `vt_write_until`, stopping at each OSC end. When
-the shell reports that a command started, later bytes go to a new block terminal. On command end they return to the shell terminal. The split is exact
-even when one read holds the end of a command and the next prompt.
+the shell reports that a command started, later bytes go to a new block terminal.
+When the command ends they return to the shell terminal. The split is exact even
+when one read holds the end of a command and the next prompt.
+
+With an `ESC \` terminator the library stops at the `ESC`, so the `\` still has to go
+to the old terminal, even if it arrives in a later read. Otherwise it prints as a
+stray character in the next block.
 
 ### Shell integration
 
@@ -144,14 +156,16 @@ oh-my-zsh's update check does, so the pane then shows the shell terminal and sen
 it keys until the prompt arrives. Commands submitted meanwhile wait for the prompt,
 because a shell that's still starting can swallow what's written to it.
 
-The prompt is hidden and the editor submits commands to the shell with bracketed
-paste plus CR. Commands sent before the shell is ready are held until it reports
-input start.
+The prompt is hidden. The editor submits commands through the library's paste
+encoder, so control characters the input can't show never reach the line editor as
+keys. Anything still holding a newline or a tab goes in as a bracketed paste.
+Commands submitted before the shell is ready wait in order, and each is sent at its
+own prompt.
 
-Fallback: without integration events the pane stays a plain terminal drawn from
-the shell terminal, with keys sent straight to the PTY. This also covers shells
-that are not supported yet. Inside a running command such as ssh or a nested
-shell, the block acts as a plain terminal, as Warp's does.
+Fallback: a shell that never reports stays a plain terminal drawn from the shell
+terminal, with keys sent straight to the PTY. That covers every shell except zsh for
+now. Inside a running command such as ssh or a nested shell, the block acts as a
+plain terminal.
 
 ### Rendering
 
@@ -162,10 +176,16 @@ A hand-written Metal renderer, one `CAMetalLayer` per pane:
   from Core Text.
 - Instanced quads for backgrounds and glyphs. Instance data is cached per row and
   rebuilt only for dirty rows, keyed by the render state's stable row ids.
-- Block chrome is drawn in the same pass, with AppKit overlays only for hover
-  actions.
-- Shaders are compiled from source at startup, which needs no Xcode. Startup cost
-  is to be measured, and can be replaced with a precompiled library later.
+- Block chrome, hover buttons, find highlights, the scrollbar and the sticky header
+  are drawn in the same pass. AppKit handles what's around the terminal: the input,
+  tab bar, find and filter bars, palettes and menus.
+- Instance positions are 16-bit, so anything that can reach beyond that, such as a
+  tall block's edges, is clipped to the view first.
+- A program using synchronized output (mode 2026) can hold drawing back for up to a
+  second, so a half-drawn frame is never shown.
+- The display link pauses when nothing is changing, so an idle pane costs nothing.
+- Shaders are compiled from source at startup, which needs no Xcode. That takes 44
+  to 112 ms, and a precompiled library could replace it later.
 
 Ligatures are out of scope at first: cell-by-cell drawing is fast and simple, and
 shaping can be added afterwards.
@@ -183,15 +203,19 @@ thread.
   the lock. Everything the read thread writes is internal to `RewarpCore`, so
   forgetting the lock is a compile error. The lock isn't recursive, and Swift can't
   stop a terminal being kept past the closure, so those two rules are on the caller.
+- PTY writes have their own queue, because a full PTY buffer blocks. Replies the
+  terminal makes during parsing are queued, and written after the lock is released.
 - Output arriving faster than the display refreshes is simply coalesced.
 
-### Panes
+### Tabs and panes
 
 A tab's layout is `PaneTree`, a plain value holding splits, ratios and pane ids.
 Views are positioned from it and stay flat children of one container, so a split
 never reparents a running pane, and the tree can be tested without any views and
 saved for session restore. Maximizing hides the other panes, which therefore can't
 hold keyboard focus.
+
+The tab bar sits on the top, left or right, and the choice is saved.
 
 ### Input editor
 
@@ -202,19 +226,62 @@ still to come.
 
 Completions run natively in Swift, never in-band in the user's shell: `$PATH`
 commands, files, git refs, ssh hosts, package scripts and make targets. Aliases and
-functions are reported by the shell integration at startup. Everything inserted is
-shell-quoted by default, because these names come from places an attacker can
-control, such as a cloned repository.
+functions are reported by the shell integration at the first prompt, and again when
+`PATH` changes. Everything inserted is shell-quoted by default, because these names
+come from places an attacker can control, such as a cloned repository.
+
+### Find and filter
+
+Find takes each block's text and runs a regular expression over it in Swift, rather
+than using `search.h`. Matches map back to cells through the library's width table,
+and drawing looks them up by visible row, so a frame's cost follows what's on screen
+and not the number of matches. Find and filter both follow a running command,
+refreshing four times a second.
+
+A filter never touches a block's output. It builds a second terminal from the rows
+it keeps, with their styling, and the block draws from that until the filter is
+cleared.
+
+### Untrusted output
+
+Anything printed to the terminal can come from an attacker: a file, a build log, a
+remote host. So printed bytes can't:
+
+- End a block or fake a command. Those need the token described under shell
+  integration, and OSC 133 is ignored altogether.
+- Move the working directory, in a shell with integration. A plain terminal has only
+  OSC 7 to go on, so it does believe that.
+- Reach the clipboard or open anything. OSC 52 has no effect, and nothing in the app
+  opens a link yet.
+- Feed text back to the shell. The terminal's replies never echo what was printed.
 
 ### Stack
 
-Swift 5 language mode, AppKit, SwiftPM. `scripts/` builds the pinned libghostty-vt
-as a static library and assembles an ad-hoc-signed `.app`, and the `Makefile` is the
-front door to all of it. Tests use Swift Testing.
+Swift 5 language mode, AppKit, SwiftPM. Zig and the Command Line Tools are enough,
+with no Xcode, because the XCFramework and `metal` steps of Ghostty's build aren't
+needed here. `scripts/` builds the pinned libghostty-vt as a static library and
+assembles an ad-hoc-signed `.app`, and the `Makefile` is the front door to all of it.
 
-No Xcode should be needed: Zig plus the Command Line Tools should be enough, as
-the XCFramework and `metal` steps of Ghostty's build are avoidable here. To be
-proven in M0.
+The version is set in `Sources/RewarpCore/Version.swift`, and it stays at 0.0.1 until
+the project's owner asks for a change.
+
+### Testing
+
+Unit tests use Swift Testing and cover `RewarpCore`, including ones that run a real
+zsh against the real integration scripts.
+
+End-to-end tests drive the real app through a control FIFO (`REWARP_CONTROL`). Input
+arrives as synthesized `NSEvent`s sent through the window, so it takes the same path
+as a user's, and each reply is a JSON snapshot of what a user would see. Windows stay
+invisible, and each run gets a private pasteboard. `REWARP_SHELL` picks another
+shell, to reach the plain terminal.
+
+Two rules came from getting these wrong:
+
+- Scripted runs always use a throwaway `HOME`. A real shell can stop at a question,
+  as oh-my-zsh's update check does, and a script might answer it.
+- A regression test has to fail without its fix, so that gets checked by taking the
+  fix out. Several tests here passed either way until they were rewritten.
 
 ## Milestones
 
@@ -222,26 +289,41 @@ proven in M0.
 Warp's public docs, each with an ID. The milestones below are an order for working
 through it, and every parity section belongs to exactly one.
 
-A box in the parity file is ticked only when a test or the running app has shown
-that the behaviour works. Progress is the count of ticked boxes, nothing else.
+A box in the parity file is ticked only by a passing end-to-end test named for its
+ID, which `tests-e2e/run.py` does on a full run. Progress is the count of ticked
+boxes, nothing else, so behaviour that works but has no such test doesn't count. At
+the time of writing that's 103 of 1,647.
 
-| Milestone | Parity sections |
-| --- | --- |
-| M0, proof. Done. | The bets below |
-| M1, plain terminal. Done. | Part of EMU and PAN, TXT basics |
-| M2, blocks | COR, BLK except find and filter, MOU for blocks, scrollbars, hover and alt-screen |
-| M3, input editor | INP, MOU for the prompt and input, CMP, AUT, HIS, CSR, FIX, ALS, XRY, HLT |
-| M4, find and palettes | BLK find and filter, PAL, NAV, FND |
-| M5, windows | TAB, VTB, PAN, WIN, TBR, HKY, and their MOU sections |
-| M6, sessions | RST, CWD, LCF, TCF, WFL, SYN |
-| M7, settings and keys | SET, KEY, KBE |
-| M8, appearance | THM, TXT, WAP, PRM, POS |
-| M9, shells | EMU, ALT, TMX, SHL, WFY, SSH, VIM |
-| M10, the rest | LNK, MKD, NTF, SEC, QUT, A11, URI, SLS, BAN, STU, IMP, UPD |
-| M11, code features | EDT, FRP, FTR, LSP, REV, WTR |
+| Milestone | Parity sections | State |
+| --- | --- | --- |
+| M0, proof | The bets below | Done |
+| M1, plain terminal | Part of EMU and PAN, TXT basics | Done |
+| M2, blocks | COR, BLK except find and filter, MOU for blocks, scrollbars, hover and alt-screen | Started |
+| M3, input editor | INP, MOU for the prompt and input, CMP, AUT, HIS, CSR, FIX, ALS, XRY, HLT | Started |
+| M4, find and palettes | BLK find and filter, PAL, NAV, FND | Started |
+| M5, windows | TAB, VTB, PAN, WIN, TBR, HKY, and their MOU sections | Started |
+| M6, sessions | RST, CWD, LCF, TCF, WFL, SYN | Not started |
+| M7, settings and keys | SET, KEY, KBE | Not started |
+| M8, appearance | THM, TXT, WAP, PRM, POS | Not started |
+| M9, shells | EMU, ALT, TMX, SHL, WFY, SSH, VIM | Not started |
+| M10, the rest | LNK, MKD, NTF, SEC, QUT, A11, URI, SLS, BAN, STU, IMP, UPD | Not started |
+| M11, code features | EDT, FRP, FTR, LSP, REV, WTR | Not started |
 
 Items marked `(verify in app)` are checked by observing Warp.app, not by reading
 its code. `CNF` lists places where the docs disagree with each other.
+
+## Known limits
+
+- `exec zsh`, which `omz reload` runs, replaces the shell with one that has no hooks.
+  The pane keeps working, but as one block that never finishes.
+- A pane closes when the PTY reaches end of file, so a background job holding the
+  terminal keeps a pane open after its shell exits.
+- Find and filter do their work on the main thread under the session lock, so they
+  can stall the parser on very long blocks.
+- Tabs that don't fit in the tab bar can't be reached with the mouse, because it
+  doesn't scroll yet. Shortcuts and the navigation palette still reach them.
+- Programs aren't told about focus changes, inline images aren't drawn, and there
+  are no ligatures.
 
 ## Default shortcuts
 
@@ -260,25 +342,22 @@ Results from M0, measured on this Mac with libghostty-vt `86aef72` in ReleaseFas
 | `vt_write_until` keeps up | 703 vs 706 MB/s, 477 MB/s with an OSC on every line | Proven |
 | The stream splits exactly | The callback fires before the call returns | Proven |
 
-From M1, with Ghostty 1.4.0 on default config and `scripts/bench.sh`:
+Since then, with Ghostty 1.4.0 on its default config, and `make bench` at 256 MB in a
+throwaway `HOME`:
 
 | Bet | Result | Status |
 | --- | --- | --- |
 | Runtime shader compile is acceptable | 44 to 112 ms, launch about 100 to 160 ms | Proven |
-| Scrolling output keeps up, keeping 50,000 rows | Rewarp 190 MB/s, Ghostty 175 MB/s | Proven |
-| Full-screen repaint keeps up, keeping 50,000 rows | Rewarp 180 MB/s, Ghostty 147 MB/s | Proven |
+| Scrolling output keeps up, keeping 50,000 rows | Rewarp 183 to 196 MB/s, Ghostty 160 to 181 MB/s | Proven |
+| Full-screen repaint keeps up, keeping 50,000 rows | Rewarp 176 to 187 MB/s, Ghostty 142 to 155 MB/s | Proven |
 | A full block is affordable | 152 MB resident for one 50,000-row block, before any compression | Measured |
 
-Frames under load, on a 120 Hz display with a window of about 39 rows: a steady
-117 to 120 fps through both a `yes` flood and a full-screen repaint, with 0.11 to
-0.17 ms to build each frame.
+Frames under load, inside a block, on a 120 Hz display with a window of about 39
+rows: 116 to 121 fps through both a `yes` flood and a full-screen repaint, with 0.10
+to 0.15 ms to build each frame.
 
 Those numbers measure drain speed and frame rate. Not yet measured: keypress
 latency, and Warp itself, which can't be scripted without writing into `~/.warp`.
-
-Router note: with an `ESC \\` terminator the callback fires on the `ESC`, so the
-`\\` still has to go to the old terminal, even if it arrives in a later read.
-Otherwise it prints as a stray character in the next block.
 
 ## Calls made without asking
 
@@ -289,6 +368,12 @@ Otherwise it prints as a stray character in the next block.
   that doesn't lean on Warp's trademark.
 - zsh first, then bash and fish.
 - macOS 14 or later as the minimum, for the modern display link APIs.
+- A private channel with a token for shell reports, not the standard OSC 133 and
+  OSC 7.
+- Startup output stays hidden unless the shell seems to be waiting for an answer.
+- `-Ounchecked` in release builds, because bounds checks are the wrong trade in a
+  per-cell render loop.
+- GNU Make as the front door, since it ships with the Command Line Tools.
 
 ## Going beyond Warp
 

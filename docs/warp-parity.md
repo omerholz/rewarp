@@ -6,6 +6,7 @@ Snapshot date: 2026-11-04. The docs and changelog move weekly, so items describe
 
 ## How to read this file
 
+- A box is ticked only by a passing end-to-end test named for its ID, such as `test_blk_032_click_selects_block`. A full `make e2e` does that, so boxes are never ticked by hand.
 - Each item is one behaviour with a stable ID. IDs never get reused. If an item is dropped, strike it through and keep the ID.
 - `(verify in app)` means the sources imply the behaviour but don't state it precisely, or don't state it at all. Items worded "Undocumented:" are open questions, not claims. Run them against the real Warp.app and rewrite the item with what it does.
 - Everything is paraphrased. Warp's menu labels and setting names are kept only because tests need them.
