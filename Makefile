@@ -16,7 +16,7 @@ INSTALL_DIR ?= /Applications
 MB          ?= 512
 KIND        ?= scroll
 
-.PHONY: help deps build release test e2e check bench icons app run zip dmg package install clean distclean
+.PHONY: help deps build release test e2e check fuzz secrets bench icons app run zip dmg package install clean distclean
 
 help: ## List these commands
 	@echo "Rewarp $(VERSION)"
@@ -38,6 +38,12 @@ e2e: build ## Run the end-to-end tests on the real app (FILTER=name narrows them
 	@python3 tests-e2e/run.py $(FILTER)
 
 check: test e2e ## Run every test
+
+fuzz: ## Run the sanitizer-enabled terminal mutation campaign
+	@scripts/fuzz.sh
+
+secrets: ## Scan all locally fetched history and the working tree with Gitleaks
+	@scripts/scan-secrets.sh
 
 bench: deps ## Compare throughput with Ghostty (MB=512, KIND=scroll or repaint)
 	@scripts/bench.sh $(MB) $(KIND)

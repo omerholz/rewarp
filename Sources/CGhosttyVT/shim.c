@@ -2,8 +2,11 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <sys/ioctl.h>
+#include <sys/resource.h>
+#include <sys/sysctl.h>
 #include <termios.h>
 #include <unistd.h>
 #include <util.h>
@@ -17,6 +20,19 @@ int rewarp_pty_spawn(const char *path,
                      uint16_t width_px,
                      uint16_t height_px,
                      pid_t *out_pid) {
+  // Resolve the ceiling before fork: getrlimit/sysctl need not be safe in the
+  // child. The soft limit can be lower than descriptors already open, so use
+  // the kernel ceiling as well as the finite hard limit.
+  int fd_limit = 0;
+  size_t limit_size = sizeof(fd_limit);
+  int mib[] = {CTL_KERN, KERN_MAXFILESPERPROC};
+  if (sysctl(mib, 2, &fd_limit, &limit_size, NULL, 0) < 0) return -1;
+  struct rlimit limit;
+  if (getrlimit(RLIMIT_NOFILE, &limit) < 0) return -1;
+  if (limit.rlim_max != RLIM_INFINITY && limit.rlim_max > (rlim_t)fd_limit &&
+      limit.rlim_max <= INT_MAX) fd_limit = (int)limit.rlim_max;
+  if (fd_limit < 3) { errno = EINVAL; return -1; }
+
   struct winsize size = {
       .ws_row = rows,
       .ws_col = cols,
@@ -48,7 +64,7 @@ int rewarp_pty_spawn(const char *path,
     }
 
     // The app's own descriptors must not leak into the user's shell.
-    for (int fd = 3; fd < 256; fd++) close(fd);
+    for (int fd = 3; fd < fd_limit; fd++) close(fd);
 
     execve(path, argv, envp);
     _exit(127);

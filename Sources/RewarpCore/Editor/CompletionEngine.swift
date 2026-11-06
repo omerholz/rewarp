@@ -309,7 +309,10 @@ public final class CompletionEngine {
             let text = isDirectory.boolValue ? "\(directoryPart)\(entry)/" : directoryPart + entry
             // A tilde only stays bare when it was typed. One from a file's name would
             // otherwise turn that file into a home directory.
-            let insertion = directoryPart.hasPrefix("~") ? ShellQuoting.escape(path: text) : ShellQuoting.escape(text)
+            let escaped = directoryPart.hasPrefix("~") ? ShellQuoting.escape(path: text) : ShellQuoting.escape(text)
+            // Shell quoting does not stop a program treating a leading dash as
+            // an option. A relative path keeps this completion a file argument.
+            let insertion = directoryPart.isEmpty && entry.hasPrefix("-") ? "./" + escaped : escaped
             items.append(Completion(text: text, kind: isDirectory.boolValue ? .directory : .file,
                                     appendsSpace: !isDirectory.boolValue, insertion: insertion))
         }

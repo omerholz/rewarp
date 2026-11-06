@@ -3,6 +3,9 @@
 Each App gets its own HOME, so nothing depends on this machine's dotfiles, its own
 pasteboard, so the user's clipboard is never touched, and its own TMPDIR, because a
 killed app leaves its sockets behind.
+
+Tests default to zsh regardless of the host account's login shell. Pass `shell`
+explicitly when exercising another shell or a custom integration fixture.
 """
 import json
 import os
@@ -37,10 +40,9 @@ class App:
         self.fifo = os.path.join(self.home, "control")
         os.mkfifo(self.fifo)
         env = dict(os.environ, HOME=self.home, TMPDIR=self.home, REWARP_CONTROL=self.fifo,
+                   REWARP_SHELL=shell or "/bin/zsh",
                    HISTFILE=os.path.join(self.home, ".zsh_history"))
         env.pop("ZDOTDIR", None)
-        if shell:
-            env["REWARP_SHELL"] = shell
         self.process = subprocess.Popen([BINARY], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=self.home)
         self.writer = None
         deadline = time.time() + 10

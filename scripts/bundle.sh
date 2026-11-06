@@ -3,14 +3,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-scripts/build-ghostty-vt.sh
-swift build -c release --product Rewarp 2>&1 | tail -1
+GHOSTTY_OPTIMIZE=ReleaseSafe scripts/build-ghostty-vt.sh
+# SwiftPM does not track changes to the external static archive as target
+# dependencies. A fresh package build also excludes artifacts from test builds.
+rm -rf .build/package
+swift build --scratch-path .build/package -c release --product Rewarp 2>&1 | tail -1
 
 APP=dist/Rewarp.app
 VERSION="$(scripts/version.sh)"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/release/Rewarp "$APP/Contents/MacOS/Rewarp"
+cp .build/package/release/Rewarp "$APP/Contents/MacOS/Rewarp"
+cp LICENSE "$APP/Contents/Resources/Rewarp-LICENSE.txt"
+cp vendor/ghostty-src/LICENSE "$APP/Contents/Resources/Ghostty-LICENSE.txt"
 cp vendor/ghostty-src/src/font/res/JetBrainsMonoNerdFont-Regular.ttf "$APP/Contents/Resources/"
 cp vendor/ghostty-src/src/font/res/OFL.txt "$APP/Contents/Resources/JetBrainsMono-OFL.txt"
 cp resources/icons/Rewarp.icns "$APP/Contents/Resources/Rewarp.icns"

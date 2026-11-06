@@ -326,16 +326,23 @@ final class TerminalView: NSView, NSTextInputClient {
     }
 
     private func draw() {
+        #if DEBUG || REWARP_TESTING
         let start = CACurrentMediaTime()
+        #endif
         let generation = glyphs.generation
         buildFrame()
         // Filling the atlas moved glyphs this frame had already placed.
         if glyphs.generation != generation { buildFrame() }
+        #if DEBUG || REWARP_TESTING
         let built = CACurrentMediaTime()
+        #endif
         renderer?.draw(frameData, glyphs: glyphs, chromeGlyphs: fonts.chrome, clear: theme.background)
+        #if DEBUG || REWARP_TESTING
         FrameStats.shared.record(build: built - start, total: CACurrentMediaTime() - start)
+        #endif
     }
 
+    #if DEBUG || REWARP_TESTING
     func prepareFrameForTesting() {
         buildFrame()
     }
@@ -351,6 +358,7 @@ final class TerminalView: NSView, NSTextInputClient {
         let bitmap = NSBitmapImageRep(cgImage: image)
         try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
     }
+    #endif
 
     // MARK: Block list
 

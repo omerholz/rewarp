@@ -16,8 +16,8 @@ enum Clipboard {
     }
 }
 
-/// Scripted runs for checks that need the real app. Nothing here is active unless
-/// the environment asks for it.
+/// Scripted checks for debug builds and explicit REWARP_TESTING builds. Normal
+/// release builds compile these entry points as no-ops.
 ///
 /// REWARP_SEND     a command to run once the shell is ready
 /// REWARP_CAPTURE  PNG path written after REWARP_WAIT seconds, then the app quits
@@ -25,15 +25,24 @@ enum Clipboard {
 /// REWARP_CONTROL  a FIFO of commands for end-to-end tests, see `ControlChannel`
 enum DebugScript {
     static var isAutomated: Bool {
+        #if DEBUG || REWARP_TESTING
         ProcessInfo.processInfo.environment["REWARP_CONTROL"] != nil
+        #else
+        false
+        #endif
     }
 
     /// An automated run that should still be seen, for visual checks.
     static var isVisible: Bool {
+        #if DEBUG || REWARP_TESTING
         ProcessInfo.processInfo.environment["REWARP_VISIBLE"] != nil
+        #else
+        false
+        #endif
     }
 
     static func runIfRequested(view: TerminalView, session: PaneSession) {
+        #if DEBUG || REWARP_TESTING
         let env = ProcessInfo.processInfo.environment
         let wait = env["REWARP_WAIT"].flatMap(Double.init) ?? 2
 
@@ -51,12 +60,14 @@ enum DebugScript {
                 NSApp.terminate(nil)
             }
         }
+        #endif
     }
 }
 
 /// Drives the app from a test process. Input arrives as synthesized NSEvents sent
 /// through the window, so tests exercise the same responder chain as a real user.
 /// Each command writes its reply to `<fifo>.reply`.
+#if DEBUG || REWARP_TESTING
 final class ControlChannel {
     private let path: String
     private let window: () -> NSWindow?
@@ -364,7 +375,7 @@ final class ControlChannel {
     }
 }
 
-/// Records frame timing for scripted runs. Costs one branch per frame otherwise.
+/// Records frame timing for scripted runs.
 final class FrameStats {
     static let shared = FrameStats()
 
@@ -401,3 +412,4 @@ final class FrameStats {
         windowStart = now
     }
 }
+#endif
