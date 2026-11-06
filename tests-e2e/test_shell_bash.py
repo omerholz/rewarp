@@ -3,13 +3,15 @@ import os
 
 from harness import App
 
+BASH = os.environ.get("REWARP_TEST_BASH", "/bin/bash")
+
 
 def test_shell_bash_login_blocks_status_and_completions():
     startup = {
         ".bash_profile": 'export BASH_PROFILE_LOADED=yes\nsource "$HOME/.bashrc"\n',
         ".bashrc": "HISTCONTROL=ignorespace\nalias rewarp_bash_alias='echo alias_works'\n",
     }
-    with App(shell="/bin/bash", startup_files=startup) as app:
+    with App(shell=BASH, startup_files=startup) as app:
         state = app.run('echo "$BASH_PROFILE_LOADED"')
         assert state["blocks"][-1]["output"] == "yes"
         command = "printf 'pipeline_output\\n' | cat"
@@ -26,7 +28,7 @@ def test_shell_bash_login_blocks_status_and_completions():
 
 
 def test_shell_bash_preserves_prompt_hooks_and_denies_later_token_requests():
-    with App(shell="/bin/bash", startup_files={
+    with App(shell=BASH, startup_files={
         ".bash_profile": "PROMPT_COMMAND='PS1=\"user_prompt> \"'\ntrap 'DEBUG_SEEN=1' DEBUG\n",
     }) as app:
         state = app.run('printf "%s:%s" "$DEBUG_SEEN" "$PS1"')
