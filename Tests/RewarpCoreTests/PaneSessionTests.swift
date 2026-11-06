@@ -106,6 +106,20 @@ struct RouterTests {
         #expect(session.shell.plainText() == "after")
     }
 
+    @Test("An empty read preserves a pending string terminator")
+    func emptyReadDuringTerminator() {
+        let session = makeSession()
+        feed(session, "\(cmd("ls", terminator: st))out\(done(0, terminator: "\u{1b}"))")
+        // A non-nil base address with a zero count must never be dereferenced.
+        var byte: UInt8 = 0
+        withUnsafePointer(to: &byte) {
+            session.ingest(UnsafeRawBufferPointer(start: $0, count: 0))
+        }
+        feed(session, "\\after")
+        #expect(session.blocks[0].terminal.plainText() == "out")
+        #expect(session.shell.plainText() == "after")
+    }
+
     @Test("A prompt without a command end still closes the running block")
     func promptClosesBlock() {
         let session = makeSession()

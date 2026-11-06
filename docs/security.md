@@ -116,7 +116,8 @@ the presence of an open-source license.
 ## Secrets
 
 Run `make secrets` from a non-shallow clone. It scans all locally fetched refs and
-the working tree with redacted Gitleaks output. The Linux x86_64 bootstrap uses a
+tracked files plus untracked, non-ignored source with redacted Gitleaks output.
+The source scan skips symlinks and ignored build output/local credentials. The Linux x86_64 bootstrap uses a
 checksum-pinned Gitleaks release; elsewhere install Gitleaks first. CI fetches
 full history. Fetch every remote branch/tag before a pre-publication audit and
 audit external artifacts separately.

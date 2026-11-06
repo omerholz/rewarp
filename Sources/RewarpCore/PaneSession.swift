@@ -182,7 +182,7 @@ public final class PaneSession {
     /// Feeds PTY output through the router. Public so tests can drive it
     /// without a process.
     public func ingest(_ bytes: UnsafeRawBufferPointer) {
-        guard let base = bytes.bindMemory(to: UInt8.self).baseAddress else { return }
+        guard !bytes.isEmpty, let base = bytes.bindMemory(to: UInt8.self).baseAddress else { return }
         let count = bytes.count
 
         lock.lock()

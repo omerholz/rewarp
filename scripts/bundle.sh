@@ -19,6 +19,8 @@ cp vendor/ghostty-src/LICENSE "$APP/Contents/Resources/Ghostty-LICENSE.txt"
 cp vendor/ghostty-src/src/font/res/JetBrainsMonoNerdFont-Regular.ttf "$APP/Contents/Resources/"
 cp vendor/ghostty-src/src/font/res/OFL.txt "$APP/Contents/Resources/JetBrainsMono-OFL.txt"
 cp resources/icons/Rewarp.icns "$APP/Contents/Resources/Rewarp.icns"
+cp THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"
+cp -R LICENSES "$APP/Contents/Resources/LICENSES"
 
 cp -R resources/shell-integration "$APP/Contents/Resources/shell-integration"
 

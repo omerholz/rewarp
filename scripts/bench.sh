@@ -79,7 +79,8 @@ for run in 1 2 3; do
   result="$WORK/rewarp-$run"
   # A throwaway HOME, so that the user's startup files can't slow the run down or
   # stop it with a question, such as an update check.
-  HOME="$WORK" BENCH_RESULT="$result" REWARP_SEND="$WORK/inner.sh" .build/bench/release/Rewarp >/dev/null 2>&1 &
+  env -u ZDOTDIR -u HISTFILE -u REWARP_CONTROL -u REWARP_CAPTURE -u REWARP_STATS -u REWARP_SHELL \
+    HOME="$WORK" BENCH_RESULT="$result" REWARP_SEND="$WORK/inner.sh" .build/bench/release/Rewarp >/dev/null 2>&1 &
   pid=$!
   wait_for "$result" "$pid" || echo "rewarp run $run did not finish"
   kill "$pid" 2>/dev/null || true

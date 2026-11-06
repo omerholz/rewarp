@@ -51,6 +51,11 @@ public enum ShellLaunch {
         let name = (shell as NSString).lastPathComponent
 
         var env = environment
+        // Automation belongs to this app invocation. A Rewarp launched from a
+        // pane must not replay its parent's test command or control channel.
+        for key in env.keys.filter({ $0.hasPrefix("REWARP_") }) {
+            env.removeValue(forKey: key)
+        }
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["TERM_PROGRAM"] = "Rewarp"

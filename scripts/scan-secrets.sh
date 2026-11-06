@@ -22,5 +22,26 @@ else
   GITLEAKS="$WORK/gitleaks"
 fi
 "$GITLEAKS" git --no-banner --redact --log-opts='--all --full-history' .
-# Uncommitted and newly added files are also checked during local runs.
-"$GITLEAKS" dir --no-banner --redact .
+# Scan tracked and untracked, non-ignored source, without following symlinks.
+SOURCE="$(mktemp -d)"
+trap 'rm -rf "$SOURCE"; if [[ -n "${WORK:-}" ]]; then rm -rf "$WORK"; fi' EXIT
+python3 - "$SOURCE" <<'PY'
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+
+destination = pathlib.Path(sys.argv[1])
+paths = subprocess.check_output(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"])
+for name in set(paths.split(b"\0")) - {b""}:
+    path = pathlib.Path(os.fsdecode(name))
+    # Never follow symlinks out of the source tree.
+    if (path.is_symlink() or any(parent.is_symlink() for parent in path.parents)
+            or not path.is_file()):
+        continue
+    target = destination / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(path, target)
+PY
+"$GITLEAKS" dir "$SOURCE" --redact --no-banner

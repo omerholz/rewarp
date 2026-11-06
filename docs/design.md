@@ -1,16 +1,15 @@
 # Rewarp design
 
-A native macOS terminal with Warp's ergonomics and Ghostty's speed, and no AI.
+A native macOS terminal with command blocks, a dedicated input editor, and no AI.
 
 ## Why
 
-Warp has the best terminal ergonomics, but LLM agents and streaming CLIs now
-push huge amounts of output through the terminal, so raw terminal speed matters
-more than it used to. Ghostty is much faster. Rewarp aims for both.
+Rewarp combines command-oriented terminal ergonomics with efficient terminal
+emulation. Streaming CLIs push large amounts of output through the terminal,
+so throughput and responsive rendering are explicit design goals.
 
-It is also an experiment in how far Claude Code can take this on its own, so
-decisions below are made by Claude unless marked otherwise. See "Calls made
-without asking".
+The initial implementation was developed with coding-agent assistance. The
+decisions below describe the architecture and its current tradeoffs.
 
 ## Goals
 
@@ -37,13 +36,12 @@ These would count as failure even if everything else worked:
 - Slower than a plain terminal because of the block machinery.
 - A shell or TUI that misbehaves because of the Warp-style features. If shell
   integration fails, the pane must fall back to a working plain terminal.
-- Copying Warp code. Warp's client is AGPL-3.0, so Rewarp is written from
-  scratch. Matching behaviour and default shortcuts is fine. Reading or porting
-  its source is not.
+- Copying Warp code or proprietary assets. Rewarp's stated approach is an
+  independent implementation from public documentation and observed behavior.
 
 ## Foundation: libghostty-vt, not `ghostty.h`
 
-The request named both libraries. Rewarp uses only `libghostty-vt`.
+Rewarp uses `libghostty-vt` for terminal emulation.
 
 `ghostty.h`'s own header calls it an internal API whose only consumer is
 Ghostty's macOS app, and tells external embedders to use `libghostty-vt`. It
@@ -294,8 +292,7 @@ with no Xcode, because the XCFramework and `metal` steps of Ghostty's build aren
 needed here. `scripts/` builds the pinned libghostty-vt as a static library and
 assembles an ad-hoc-signed `.app`, and the `Makefile` is the front door to all of it.
 
-The version is set in `Sources/RewarpCore/Version.swift`, and it stays at 0.0.1 until
-the project's owner asks for a change.
+The version is set in `Sources/RewarpCore/Version.swift`.
 
 ### Testing
 
@@ -328,7 +325,7 @@ through it, and every parity section belongs to exactly one.
 A box in the parity file is ticked only by a passing end-to-end test named for its
 ID, which `tests-e2e/run.py` does on a full run. Progress is the count of ticked
 boxes, nothing else, so behaviour that works but has no such test doesn't count. At
-the time of writing that's 103 of 1,647.
+the time of writing that's 104 of 1,647.
 
 | Milestone | Parity sections | State |
 | --- | --- | --- |
@@ -376,7 +373,10 @@ Warp's documented macOS defaults, listed under KEY in the parity file.
 
 ## Bets
 
-Results from M0, measured on this Mac with libghostty-vt `86aef72` in ReleaseFast.
+Historical M0 results, measured on the original development Mac with
+libghostty-vt `86aef72` in ReleaseFast. These predate the switch to Swift's
+standard release optimization and Zig `ReleaseSafe`; remeasure current builds
+before making performance claims.
 
 | Bet | Result | Status |
 | --- | --- | --- |
@@ -404,9 +404,9 @@ to 0.15 ms to build each frame.
 Those numbers measure drain speed and frame rate. Not yet measured: keypress
 latency, and Warp itself, which can't be scripted without writing into `~/.warp`.
 
-## Calls made without asking
+## Implementation decisions
 
-- libghostty-vt only, not `ghostty.h` (departs from the request; reasons above).
+- libghostty-vt for terminal emulation; reasons above.
 - One terminal per block.
 - Own Metal renderer, AppKit, SwiftPM, no Xcode project.
 - App name is Rewarp, from the repo name. Public distribution may want a name
@@ -418,14 +418,14 @@ latency, and Warp itself, which can't be scripted without writing into `~/.warp`
 - An alias on `exec`, which shows up in the user's `alias` list, because nothing else
   keeps the hooks through `exec zsh` without leaving `ZDOTDIR` exported.
 - Startup output stays hidden unless the shell seems to be waiting for an answer.
-- `-Ounchecked` in release builds, because bounds checks are the wrong trade in a
-  per-cell render loop.
+- Standard Swift release optimization with safety checks, and Zig `ReleaseSafe`,
+  because terminal input and rendering data can be attacker-controlled.
 - GNU Make as the front door, since it ships with the Command Line Tools.
 - One private AppKit method overridden so tabs can be dragged. Rewarp only defines it,
   so losing it brings back a bug, not a crash. App Store review might object to it.
 
 ## Going beyond Warp
 
-Asked for by the user, and not in Warp:
+Additional planned behavior:
 
 - Tabs in a right sidebar. Warp offers the top and a left sidebar.
