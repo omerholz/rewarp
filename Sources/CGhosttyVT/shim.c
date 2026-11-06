@@ -2,11 +2,24 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <libproc.h>
 #include <signal.h>
+#include <string.h>
+#include <sys/proc_info.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 #include <util.h>
+
+int rewarp_process_is_child_executable(pid_t child, pid_t parent, const char *path) {
+  struct proc_bsdinfo info;
+  if (proc_pidinfo(child, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) != (int)sizeof(info) ||
+      info.pbi_ppid != (uint32_t)parent) return 0;
+  char executable[PROC_PIDPATHINFO_MAXSIZE];
+  int length = proc_pidpath(child, executable, sizeof(executable));
+  if (length <= 0 || length >= (int)sizeof(executable)) return 0;
+  return strcmp(executable, path) == 0;
+}
 
 int rewarp_pty_spawn(const char *path,
                      char *const argv[],

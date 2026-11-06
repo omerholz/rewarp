@@ -1,5 +1,7 @@
 import Darwin
 import Foundation
+import CGhosttyVT
+import os
 
 /// How the shell gets its report token.
 ///
@@ -73,9 +75,10 @@ final class TokenHandoff {
     /// Answers only `shell`, from now until this object goes away. The shell can
     /// connect before this runs, since the listener is up by the time it starts, and
     /// it then waits in the backlog.
-    func serve(token: String, shell: pid_t) {
+    func serve(token: String, shell: pid_t, helperPath: String? = nil) {
         let listener = self.listener
         let path = self.path
+        let helperAvailable = OSAllocatedUnfairLock(initialState: true)
         // Not a background queue: every new shell waits on this before it can start.
         let source = DispatchSource.makeReadSource(fileDescriptor: listener, queue: .global(qos: .userInitiated))
         source.setEventHandler {
@@ -88,7 +91,19 @@ final class TokenHandoff {
 
             var peer: pid_t = 0
             var length = socklen_t(MemoryLayout<pid_t>.size)
-            guard getsockopt(client, SOL_LOCAL, LOCAL_PEERPID, &peer, &length) == 0, peer == shell else { return }
+            guard getsockopt(client, SOL_LOCAL, LOCAL_PEERPID, &peer, &length) == 0 else { return }
+            if peer != shell {
+                // Shells without native Unix sockets use the bundled helper
+                // before sourcing any user startup files. No later command may
+                // request the credential, even by invoking that same helper.
+                guard let helperPath,
+                      rewarp_process_is_child_executable(peer, shell, helperPath) != 0,
+                      helperAvailable.withLock({ available in
+                          guard available else { return false }
+                          available = false
+                          return true
+                      }) else { return }
+            }
             let reply = Array((token + "\n").utf8)
             _ = write(client, reply, reply.count)
         }

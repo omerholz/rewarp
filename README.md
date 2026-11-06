@@ -20,10 +20,14 @@ Early, at version 0.0.1. What works today:
   and maximize
 - Full-screen programs, mouse reporting and synchronized output
 
-Blocks and the input editor need shell integration, which only zsh has so far. Other
-shells run as a plain terminal.
+Blocks and the input editor need a bundled shell integration. Other shells run
+as a plain terminal; see the adapter documentation under
+[`resources/shell-integration`](resources/shell-integration) for tested setups.
 
-Not built yet: settings, themes, bash and fish integration, session restore,
+The [shell integration architecture and tests](docs/shell-integrations.md) cover
+normal startup files, custom ZDOTDIR, and a pinned, actual Oh My Zsh installation.
+
+Not built yet: settings, themes, session restore,
 workflows, launch configurations, Vim keybindings, inline images and the code
 features. [Known limits](docs/design.md#known-limits) lists what to watch out for.
 

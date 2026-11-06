@@ -29,16 +29,20 @@ public final class PTYProcess {
         /// Set when this shell will report command boundaries. It proves a report
         /// came from the shell, and not from something a command printed.
         public var integrationToken: String?
+        /// Opts into a single authenticated helper bootstrap for shells without
+        /// a native socket builtin. Zsh keeps its direct, PID-bound handoff.
+        public var integrationHelperPath: String?
 
         public var hasIntegration: Bool { integrationToken != nil }
 
         public init(path: String, argv: [String], environment: [String: String], workingDirectory: String?,
-                    integrationToken: String? = nil) {
+                    integrationToken: String? = nil, integrationHelperPath: String? = nil) {
             self.path = path
             self.argv = argv
             self.environment = environment
             self.workingDirectory = workingDirectory
             self.integrationToken = integrationToken
+            self.integrationHelperPath = integrationHelperPath
         }
     }
 

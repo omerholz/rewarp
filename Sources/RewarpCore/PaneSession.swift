@@ -72,6 +72,12 @@ public final class PaneSession {
     private var pendingEvents: [RawEvent] = []
     /// Commands submitted before the shell could take them, oldest first.
     private var pendingCommands: [String] = []
+    /// A shell may acknowledge a command without reconstructing it from history.
+    /// Keep exactly what was sent until its authenticated start report arrives.
+    private var submittedCommand: String?
+    /// Set while a command the shell hasn't reacted to holds back the next one, and
+    /// fires if the shell never does.
+    private var submissionHold: DispatchWorkItem?
     private var awaitingStringTerminator = false
     private var pendingWrites: [[UInt8]] = []
     private var wasFullScreen = false
@@ -90,6 +96,10 @@ public final class PaneSession {
     /// How long a program can hold drawing back, so one that never releases its
     /// hold can't freeze the pane.
     private static let maximumRenderHold: Double = 1
+    /// How long a submission can hold the next one back. A shell can answer a line
+    /// with no report at all, by waiting at a continuation prompt for a closing quote
+    /// or asking `[nyae]?` about a typo, and only the next submission can answer it.
+    private static let maximumSubmissionHold: Double = 1
 
     private enum RawEvent {
         case promptStart
@@ -128,7 +138,9 @@ public final class PaneSession {
             launch: launch, cols: cols, rows: rows,
             widthPx: cols * cellWidth, heightPx: rows * cellHeight)
         self.process = process
-        if let reportToken { tokenHandoff?.serve(token: reportToken, shell: process.pid) }
+        if let reportToken {
+            tokenHandoff?.serve(token: reportToken, shell: process.pid, helperPath: launch.integrationHelperPath)
+        }
         refreshBranch(for: workingDirectory)
         process.start(
             // Weak, because a pane can close while its shell is still printing.
@@ -253,10 +265,41 @@ public final class PaneSession {
     private func becomeReady() {
         phase = .ready
         post(.ready)
-        // One at a time, so that each command starts from its own prompt.
-        if !pendingCommands.isEmpty {
-            pendingWrites.append(Self.encode(command: pendingCommands.removeFirst()))
-        }
+        sendNextCommand()
+    }
+
+    /// Runs under the lock. One at a time, so that each command starts from its own
+    /// prompt.
+    private func sendNextCommand() {
+        guard submissionHold == nil, !pendingCommands.isEmpty else { return }
+        pendingWrites.append(prepareSubmission(of: pendingCommands.removeFirst()))
+    }
+
+    /// Runs under the lock. The bytes to send, which hold the next command back.
+    private func prepareSubmission(of command: String) -> [UInt8] {
+        let bytes = Self.encode(command: command)
+        submittedCommand = Self.commandText(from: bytes)
+        let hold = DispatchWorkItem { [weak self] in self?.submissionHoldExpired() }
+        submissionHold = hold
+        // Not the main queue: a full PTY buffer must never stall the interface.
+        DispatchQueue.global(qos: .userInitiated)
+            .asyncAfter(deadline: .now() + Self.maximumSubmissionHold, execute: hold)
+        return bytes
+    }
+
+    /// Runs under the lock.
+    private func endSubmissionHold() {
+        submissionHold?.cancel()
+        submissionHold = nil
+    }
+
+    private func submissionHoldExpired() {
+        lock.lock()
+        submissionHold = nil
+        if phase == .ready { sendNextCommand() }
+        let writes = takeWrites()
+        lock.unlock()
+        for write in writes { process?.write(write) }
     }
 
     /// Runs under the lock, after the parser has stopped, because callbacks
@@ -269,13 +312,19 @@ public final class PaneSession {
             switch event {
             case .promptStart:
                 finishRunningBlock(exitCode: nil)
+                // A parse error can return to the prompt without a start report.
+                submittedCommand = nil
+                endSubmissionHold()
                 phase = .prompt
                 post(.promptStarted)
             case .inputStart:
                 finishRunningBlock(exitCode: nil)
                 becomeReady()
             case .outputStart(let command):
-                startBlock(command: command)
+                let text = command.isEmpty ? (submittedCommand ?? "Shell command") : command
+                submittedCommand = nil
+                endSubmissionHold()
+                startBlock(command: text)
             case .commandEnd(let exitCode):
                 finishRunningBlock(exitCode: exitCode)
             }
@@ -314,10 +363,11 @@ public final class PaneSession {
     /// Runs a command at the prompt, or holds it until the shell is ready.
     public func submit(command: String) {
         lock.lock()
-        let ready = phase == .ready && pendingCommands.isEmpty
+        let ready = phase == .ready && pendingCommands.isEmpty && submissionHold == nil
         if !ready { pendingCommands.append(command) }
+        let bytes = ready ? prepareSubmission(of: command) : []
         lock.unlock()
-        if ready { process?.write(Self.encode(command: command)) }
+        if ready { process?.write(bytes) }
     }
 
     /// A safety net for when the shell never reports that it's reading input, as
@@ -336,6 +386,8 @@ public final class PaneSession {
         lock.lock()
         let commands = pendingCommands
         pendingCommands.removeAll()
+        submittedCommand = nil
+        endSubmissionHold()
         lock.unlock()
         for command in commands { process?.write(Self.encode(command: command)) }
         requestFrame()
@@ -348,6 +400,16 @@ public final class PaneSession {
     static func encode(command: String) -> [UInt8] {
         let needsBrackets = command.unicodeScalars.contains { $0.value < 0x20 }
         return encodedPaste(command, bracketed: needsBrackets) + [0x0D]
+    }
+
+    private static func commandText(from encoded: [UInt8]) -> String {
+        var bytes = encoded.dropLast() // The submission's Enter key.
+        let open = Array("\u{1b}[200~".utf8)
+        let close = Array("\u{1b}[201~".utf8)
+        if bytes.starts(with: open), bytes.suffix(close.count).elementsEqual(close) {
+            bytes = bytes.dropFirst(open.count).dropLast(close.count)
+        }
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     // MARK: Layout

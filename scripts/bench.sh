@@ -71,7 +71,7 @@ print(f"{name:10} {mb / (end - start):8.0f} MB/s  ({end - start:.2f} s for {mb} 
 PY
 }
 
-swift build -c release --product Rewarp 2>&1 | tail -1
+swift build -c release 2>&1 | tail -1
 
 for run in 1 2 3; do
   result="$WORK/rewarp-$run"

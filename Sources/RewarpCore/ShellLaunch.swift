@@ -42,6 +42,23 @@ public enum ShellLaunch {
         return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
+    /// The bridge is installed beside the executable, including SwiftPM's test
+    /// bundle ancestors. Never resolve it through PATH or a working directory.
+    public static func integrationHelper() -> URL? {
+        // XCTest's main bundle is the Xcode test host, not the package test
+        // bundle. The anchor locates the binary containing RewarpCore safely.
+        let bundles = [Bundle.main, Bundle(for: ShellIntegrationBundleAnchor.self)]
+        for bundle in bundles {
+            guard var directory = bundle.executableURL?.resolvingSymlinksInPath() else { continue }
+            for _ in 0..<6 {
+                directory = directory.deletingLastPathComponent()
+                let candidate = directory.appendingPathComponent("RewarpShellBridge")
+                if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
+            }
+        }
+        return nil
+    }
+
     public static func login(
         workingDirectory: String,
         shell: String = userShell(),
@@ -51,6 +68,7 @@ public enum ShellLaunch {
         let name = (shell as NSString).lastPathComponent
 
         var env = environment
+        env["SHELL"] = shell
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["TERM_PROGRAM"] = "Rewarp"
@@ -58,11 +76,13 @@ public enum ShellLaunch {
         if env["LANG"] == nil { env["LANG"] = "en_US.UTF-8" }
 
         var token: String?
-        if name == "zsh", let integration {
+        let integrationRoot = env["REWARP_SHELL_INTEGRATION"] == "none" ? nil : integration
+        if name == "zsh", let integration = integrationRoot, let helper = integrationHelper() {
             // The script restores this straight away, so the user's shell never
             // sees a different ZDOTDIR.
             if let existing = env["ZDOTDIR"] { env["REWARP_USER_ZDOTDIR"] = existing }
             env["ZDOTDIR"] = integration.appendingPathComponent("zsh").path
+            env["REWARP_SHELL_HELPER"] = helper.path
             // Never in the environment. The shell asks for it through TokenHandoff.
             token = UUID().uuidString
         }
@@ -72,3 +92,5 @@ public enum ShellLaunch {
                                  workingDirectory: workingDirectory, integrationToken: token)
     }
 }
+
+private final class ShellIntegrationBundleAnchor: NSObject {}

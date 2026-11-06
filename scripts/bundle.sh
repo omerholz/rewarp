@@ -4,13 +4,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 scripts/build-ghostty-vt.sh
-swift build -c release --product Rewarp 2>&1 | tail -1
+swift build -c release 2>&1 | tail -1
 
 APP=dist/Rewarp.app
 VERSION="$(scripts/version.sh)"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/Rewarp "$APP/Contents/MacOS/Rewarp"
+cp .build/release/RewarpShellBridge "$APP/Contents/MacOS/RewarpShellBridge"
 cp vendor/ghostty-src/src/font/res/JetBrainsMonoNerdFont-Regular.ttf "$APP/Contents/Resources/"
 cp vendor/ghostty-src/src/font/res/OFL.txt "$APP/Contents/Resources/JetBrainsMono-OFL.txt"
 cp resources/icons/Rewarp.icns "$APP/Contents/Resources/Rewarp.icns"

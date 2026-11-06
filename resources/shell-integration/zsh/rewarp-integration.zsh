@@ -4,16 +4,7 @@
 
 builtin typeset -g _rewarp_running=0
 builtin typeset -g _rewarp_installed=0
-
-_rewarp_urlencode() {
-  builtin setopt local_options extended_glob
-  builtin local LC_ALL=C
-  REPLY=${1//(#m)[^A-Za-z0-9._~\/-]/%${(l:2::0:)$(( [##16] #MATCH ))}}
-}
-
-_rewarp_report() {
-  builtin printf '\e]7701;%s=%s;%s\a' "$1" "$_rewarp_token" "$2"
-}
+builtin source -- "${${(%):-%x}:A:h:h}/common.sh"
 
 # Runs when the line editor starts reading, which is exactly when the shell can
 # accept a command. A marker in PS1 would be simpler, but prompt themes rewrite
@@ -38,22 +29,8 @@ _rewarp_wrap_line_init() {
 
 # The app can't see the shell's real environment, which matters most when it was
 # launched from Finder, so the parts completion needs are reported here.
-_rewarp_report_environment() {
-  [[ "$PATH" == "$_rewarp_reported_path" ]] && builtin return
-  _rewarp_reported_path="$PATH"
-  _rewarp_urlencode "$PATH"
-  _rewarp_report path "$REPLY"
-  _rewarp_urlencode "${(j: :)${(k)aliases}} ${(j: :)${(k)functions:#[_.+-]*}}"
-  _rewarp_report names "$REPLY"
-}
-
 _rewarp_precmd() {
   builtin local exit_code=$?
-
-  if (( _rewarp_running )); then
-    _rewarp_report done "$exit_code"
-    _rewarp_running=0
-  fi
 
   if (( ! _rewarp_installed )); then
     _rewarp_installed=1
@@ -65,17 +42,11 @@ _rewarp_precmd() {
   # Done here, not at load time, because the user's startup files have all run by
   # now. Repeated at every prompt in case something replaces it later.
   _rewarp_wrap_line_init
-  _rewarp_report_environment
-
-  _rewarp_urlencode "$PWD"
-  _rewarp_report cwd "$REPLY"
-  _rewarp_report prompt
+  _rewarp_prompt "$exit_code" "${(j: :)${(k)aliases}} ${(j: :)${(k)functions:#[_.+-]*}}"
 }
 
 _rewarp_preexec() {
-  _rewarp_urlencode "$1"
-  _rewarp_report start "$REPLY"
-  _rewarp_running=1
+  _rewarp_command_start "$1"
 }
 
 builtin autoload -Uz add-zsh-hook
@@ -93,5 +64,5 @@ add-zsh-hook preexec _rewarp_preexec
 # asks the app for it.
 if [[ -n "$_rewarp_socket" ]]; then
   builtin typeset -g _rewarp_zdotdir="${${(%):-%x}:A:h}"
-  builtin alias exec='REWARP_USER_ZDOTDIR=${${(M)${(t)ZDOTDIR}:#*export*}:+$ZDOTDIR} ZDOTDIR=$_rewarp_zdotdir REWARP_SOCKET=$_rewarp_socket exec'
+  builtin alias exec='REWARP_USER_ZDOTDIR=${${(M)${(t)ZDOTDIR}:#*export*}:+$ZDOTDIR} ZDOTDIR=$_rewarp_zdotdir REWARP_SOCKET=$_rewarp_socket REWARP_SHELL_HELPER=$_rewarp_helper exec'
 fi
