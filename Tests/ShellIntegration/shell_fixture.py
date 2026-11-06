@@ -129,14 +129,25 @@ class ShellFixture:
             os.kill(self.pid, signal.SIGHUP)
         except ProcessLookupError:
             pass
-        deadline = time.monotonic() + 2
-        while time.monotonic() < deadline:
-            if os.waitpid(self.pid, os.WNOHANG)[0]:
-                break
-            time.sleep(0.02)
-        else:
+        def reap(timeout):
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline:
+                if os.waitpid(self.pid, os.WNOHANG)[0]:
+                    return True
+                # Darwin can wait for slave-side output to drain during exit.
+                # Never waitpid with a blocking wait while leaving that output
+                # unread, even after SIGKILL.
+                try:
+                    os.read(self.fd, 65536)
+                except OSError as error:
+                    if error.errno not in (errno.EIO, errno.EAGAIN, errno.EWOULDBLOCK):
+                        raise
+                time.sleep(0.01)
+            return False
+        if not reap(2):
             os.kill(self.pid, signal.SIGKILL)
-            os.waitpid(self.pid, 0)
+            if not reap(2):
+                raise AssertionError("shell could not be reaped after SIGKILL while draining its PTY")
         os.close(self.fd)
         self.thread.join(timeout=1)
         self.directory.cleanup()
