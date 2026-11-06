@@ -9,11 +9,25 @@ from shell_fixture import REPORT, ROOT, TOKEN, ShellFixture
 @unittest.skipUnless(shutil.which("fish"), "fish is required")
 class FishAdapterTests(unittest.TestCase):
     def shell(self, startup=None):
-        script = ROOT / "resources/shell-integration/fish/bootstrap.fish"
+        script = ROOT / "resources/shell-integration/fish"
+        def environment(home):
+            wrapper = home / "wrapper/fish"
+            snippets = wrapper / "conf.d"
+            snippets.mkdir(parents=True)
+            user = home / ".config/fish"
+            user.mkdir(parents=True, exist_ok=True)
+            variables = user / "fish_variables"
+            variables.touch(exist_ok=True)
+            (wrapper / "fish_variables").symlink_to(variables)
+            for path in (user / "conf.d").glob("*.fish"):
+                (snippets / path.name).symlink_to("/dev/null")
+            (snippets / "rewarp-bootstrap.fish").write_text('source "$REWARP_SHELL_INIT/bootstrap.fish"\n')
+            (wrapper / "config.fish").write_text('if test -r "$_rewarp_user_config/config.fish"; source "$_rewarp_user_config/config.fish"; end\n')
+            return {"REWARP_SHELL_INIT": str(script), "XDG_CONFIG_HOME": str(wrapper.parent),
+                    "REWARP_USER_XDG_CONFIG_HOME": str(home / ".config"), "REWARP_USER_XDG_CONFIG_HOME_SET": "1"}
         return ShellFixture(shell=os.environ.get("REWARP_TEST_FISH", "fish"), startup=startup,
-                            argv=["-fish", "--no-config", "--interactive", "--init-command",
-                                  'source "$REWARP_SHELL_INIT"'],
-                            environment={"REWARP_SHELL_INIT": str(script)})
+                            argv=["-fish", "--interactive", "--init-command",
+                                  'source "$_rewarp_init/hooks.fish"'], environment=environment)
 
     def test_normal_startup_blocks_status_and_private_bootstrap(self):
         with self.shell({
@@ -34,6 +48,17 @@ class FishAdapterTests(unittest.TestCase):
             self.assertIn(b"login\r\n", output)
             output, _ = shell.run("env | grep -c -E 'REWARP_(SOCKET|SHELL_HELPER|SHELL_INIT)'")
             self.assertIn(b"0\r\n", output)
+
+    def test_universal_settings_are_loaded_persisted_and_shared_with_ordinary_fish(self):
+        with self.shell({".config/fish/fish_variables": "# VERSION: 3.0\nSETUVAR rewarp_fixture_universal:original\n"}) as shell:
+            shell.ready()
+            output, _ = shell.run('echo "UNIVERSAL:$rewarp_fixture_universal"')
+            self.assertIn(b"UNIVERSAL:original", output)
+            shell.run("set -U rewarp_fixture_universal updated")
+            output, _ = shell.run("fish -c 'echo SHARED:$rewarp_fixture_universal'")
+            self.assertIn(b"SHARED:updated", output)
+            self.assertTrue((shell.home / "wrapper/fish/fish_variables").is_symlink())
+            self.assertIn("updated", (shell.home / ".config/fish/fish_variables").read_text())
 
     def test_user_prompt_keeps_status_and_pipeline_status(self):
         with self.shell({".config/fish/config.fish": '''

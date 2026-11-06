@@ -77,6 +77,7 @@ public enum ShellLaunch {
 
         var token: String?
         var bootstrapHelper: String?
+        var fishIntegration: FishIntegration?
         var arguments: [String] = []
         let integrationRoot = env["REWARP_SHELL_INTEGRATION"] == "none" ? nil : integration
         if name == "zsh", let integration = integrationRoot, let helper = integrationHelper() {
@@ -88,20 +89,29 @@ public enum ShellLaunch {
             // Never in the environment. The shell asks for it through TokenHandoff.
             token = UUID().uuidString
         } else if name == "fish", let integration = integrationRoot, let helper = integrationHelper() {
-            let bootstrap = integration.appendingPathComponent("fish/bootstrap.fish")
-            if FileManager.default.fileExists(atPath: bootstrap.path) {
-                env["REWARP_SHELL_INIT"] = bootstrap.path
+            let directory = integration.appendingPathComponent("fish")
+            if FileManager.default.fileExists(atPath: directory.appendingPathComponent("bootstrap.fish").path),
+               let files = FishIntegration(environment: env) {
+                fishIntegration = files
+                if let original = env["XDG_CONFIG_HOME"] {
+                    env["REWARP_USER_XDG_CONFIG_HOME"] = original
+                    env["REWARP_USER_XDG_CONFIG_HOME_SET"] = "1"
+                }
+                env["XDG_CONFIG_HOME"] = files.directory.path
+                env["REWARP_SHELL_INIT"] = directory.path
                 env["REWARP_SHELL_HELPER"] = helper.path
                 token = UUID().uuidString
                 bootstrapHelper = helper.path
-                arguments = ["--no-config", "--interactive", "--init-command", "source \"$REWARP_SHELL_INIT\""]
+                arguments = ["--interactive", "--init-command", "source \"$_rewarp_init/hooks.fish\""]
             }
         }
 
         // A leading dash in argv[0] is how a shell learns it is a login shell.
-        return PTYProcess.Launch(path: shell, argv: ["-\(name)"] + arguments, environment: env,
+        var launch = PTYProcess.Launch(path: shell, argv: ["-\(name)"] + arguments, environment: env,
                                  workingDirectory: workingDirectory, integrationToken: token,
                                  integrationHelperPath: bootstrapHelper)
+        launch.fishIntegration = fishIntegration
+        return launch
     }
 }
 

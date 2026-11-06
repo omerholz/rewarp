@@ -4,10 +4,15 @@ Fish uses its native `fish_preexec`, `fish_postexec`, and `fish_prompt` events.
 The native shared bridge handles credential transport, byte encoding, and OSC
 framing. Fish keeps only its event hooks, metadata collection, and startup logic.
 
-The launch retains login-shell semantics and claims a one-use credential before
-reading ordinary startup files. It then loads Fish's internal configuration,
-system configuration, and the user's XDG `config.fish` in their usual order. Fish's
-own internal initialization handles user, system, and vendor `conf.d` precedence.
+The launch retains login-shell semantics and Fish's native initialization,
+including universal-variable loading and synchronization. A private temporary XDG
+wrapper claims a one-use credential at the user `conf.d` stage, before user
+snippets or vendor programs run. It restores the user's XDG paths, loads snippets
+by their real paths, and masks matching basenames so Fish retains user > system >
+vendor precedence. The system and user `config.fish` still run in their normal
+order. The wrapper links the real `fish_variables` file; Fish resolves that link
+before atomic updates, so ordinary Fish sessions continue sharing those settings.
+It is removed after the pane shell exits.
 The credential stays unexported and report calls suppress Fish tracing locally.
 
 The adapter preserves user prompt functions and the right prompt. A small wrapper
