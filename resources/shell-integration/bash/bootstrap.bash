@@ -69,11 +69,19 @@ _rewarp_precmd() {
   return 0
 }
 
-# Preserve both scalar PROMPT_COMMAND and the array form supported by Bash 5.1+.
+# Capture status while expanding a no-op stdout duplication on a command group.
+# A prefix function or assignment command would overwrite PIPESTATUS before the
+# user's prompt hook can read it. The group retains the user's normal stdin.
 if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )) &&
     [[ $(builtin declare -p PROMPT_COMMAND 2>/dev/null) == 'declare -a'* ]]; then
-  PROMPT_COMMAND=('_rewarp_capture_status "$_"' "${PROMPT_COMMAND[@]}" '_rewarp_precmd')
+  PROMPT_COMMAND=("${PROMPT_COMMAND[@]}")
+  PROMPT_COMMAND[0]=$'{\n'${PROMPT_COMMAND[0]:-:}$'\n} 1>&$((_rewarp_status=$?, _rewarp_at_prompt=0, 1))'
+  PROMPT_COMMAND+=('_rewarp_precmd')
+elif (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) )); then
+  PROMPT_COMMAND=$'{\n'${PROMPT_COMMAND:-:}$'\n} 1>&$((_rewarp_status=$?, _rewarp_at_prompt=0, 1))\n_rewarp_precmd'
 else
+  # Bash 3.2 itself clears PIPESTATUS when any DEBUG trap runs. Keep the legacy
+  # status hook simple; prompts needing pipeline details should use current Bash.
   PROMPT_COMMAND='_rewarp_capture_status "$_"'$'\n'${PROMPT_COMMAND-}$'\n''_rewarp_precmd'
 fi
 

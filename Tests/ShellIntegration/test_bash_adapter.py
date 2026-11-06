@@ -2,6 +2,7 @@ import faulthandler
 import os
 import shutil
 import socket
+import subprocess
 import unittest
 
 from shell_fixture import REPORT, ROOT, TOKEN, ShellFixture
@@ -59,6 +60,28 @@ class BashAdapterTests(unittest.TestCase):
             output, events = shell.run("false")
             self.assertIn(("done", "1"), events)
             self.assertIn(b"STATUS:1 >", output)
+
+    def test_prompt_hooks_receive_original_status_and_pipeline_status(self):
+        version = tuple(map(int, subprocess.check_output([
+            os.environ.get("REWARP_TEST_BASH", "bash"), "-c",
+            'printf "%s %s" "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}"',
+        ]).split()))
+        config = '''
+PROMPT_COMMAND='USER_STATUS=$? USER_PIPE=("${PIPESTATUS[@]}")'
+PS1='STATUS:$USER_STATUS PIPE:${USER_PIPE[*]}> '
+'''
+        with self.shell({".bash_profile": config}) as shell:
+            shell.ready()
+            output, _ = shell.run("false | true")
+            self.assertIn(b"STATUS:0 ", output)
+            if version >= (4, 4):
+                self.assertIn(b"STATUS:0 PIPE:1 0>", output)
+            output, _ = shell.run("false")
+            self.assertIn(b"STATUS:1 ", output)
+            if version >= (4, 4):
+                self.assertIn(b"STATUS:1 PIPE:1>", output)
+            _, events = shell.run("echo )")
+            self.assertFalse(any(key == "start" for key, _ in events))
 
     def test_array_or_scalar_prompt_commands_preserve_each_user_action(self):
         config = '''

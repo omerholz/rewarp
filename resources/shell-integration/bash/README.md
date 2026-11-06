@@ -19,6 +19,11 @@ uses a guarded DEBUG hook. Encoding, framing, lifecycle, and metadata handling
 are shared with the other adapters. Command labels come from the submitted text,
 so commands omitted from shell history still form correct blocks.
 
+On current Bash, prompt hooks receive the preceding command's status and
+PIPESTATUS unchanged. Bash 3.2 itself clears PIPESTATUS when any DEBUG trap runs;
+its command exit status remains accurate, but pipeline-aware prompt themes need
+Bash 4.4 or newer for complete pipeline details.
+
 The authenticated helper bootstrap is single-use. Normal child commands cannot
 retrieve its token afterward. Set `REWARP_SHELL_INTEGRATION=none` for a standard
 terminal without integration.
