@@ -183,7 +183,9 @@ The prompt is hidden. The editor submits commands through the library's paste
 encoder, so control characters the input can't show never reach the line editor as
 keys. Anything still holding a newline or a tab goes in as a bracketed paste.
 Commands submitted before the shell is ready wait in order, and each is sent at its
-own prompt.
+own prompt. A command also holds back the next one until the shell reacts to it, but
+for a second at most. A line can get no report at all, when zsh waits for a closing
+quote or asks `[nyae]?` about a typo, and only the next submission can answer it.
 
 Fallback: a shell that never reports stays a plain terminal drawn from the shell
 terminal, with keys sent straight to the PTY. That covers every shell except zsh for

@@ -300,6 +300,26 @@ struct ZshIntegrationTests {
         #expect(fixture.session.blocks.map(\.command) == ["echo first", "echo second"])
     }
 
+    @Test("The next submission finishes a line the shell is still reading")
+    func continuationLine() throws {
+        let fixture = try Fixture()
+        try fixture.wait("the prompt") { $0.phase == .ready }
+        fixture.session.submit(command: "echo don't")
+        // zsh waits for the closing quote and reports nothing, so no report can help.
+        let block = try fixture.run("'", block: 0)
+        #expect(block.command == "echo don't\n'")
+        #expect(fixture.text(of: block) == "dont")
+    }
+
+    @Test("The next submission answers a question the shell asks about a line")
+    func spellingCorrection() throws {
+        let fixture = try Fixture(zshrc: "setopt correct")
+        try fixture.wait("the prompt") { $0.phase == .ready }
+        fixture.session.submit(command: "ehco answered")
+        let block = try fixture.run("y", block: 0)
+        #expect(fixture.text(of: block) == "answered")
+    }
+
     @Test("A command becomes a block holding its command, output and exit code")
     func basicBlock() throws {
         let fixture = try Fixture()

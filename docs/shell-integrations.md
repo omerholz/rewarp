@@ -13,6 +13,9 @@ are encoded consistently in one implementation.
 Adapters can acknowledge a submitted command without reading or changing shell
 history: the router retains its sanitized submitted text until that authenticated
 start report. Returning to a prompt without preexec clears that pending label.
+Adapters don't have to report a line the shell keeps reading, such as one with an
+open quote. The router only holds the next submission back for a second, and then
+sends it, because that line is what the shell is waiting for.
 
 `resources/shell-integration/common.sh` owns the POSIX-family command lifecycle
 and change detection for PATH, aliases, and functions. It ends the command before

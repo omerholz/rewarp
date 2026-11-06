@@ -44,6 +44,17 @@ struct RouterTests {
         #expect(session.blocks.first?.command == "echo recovered")
     }
 
+    @Test("A ready report that arrives late leaves queued commands behind the one still starting")
+    func lateReadyKeepsCommandsApart() {
+        let session = makeSession()
+        feed(session, promptStart)
+        session.submit(command: "echo first")
+        session.submit(command: "echo second")
+        session.assumeReadyIfStillAtPrompt()
+        feed(session, inputStart + cmd(""))
+        #expect(session.blocks.first?.command == "echo first")
+    }
+
     @Test("Empty authenticated start reports use submitted text without changing shell history")
     func submittedCommandText() {
         let session = makeSession()

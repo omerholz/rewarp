@@ -37,6 +37,14 @@ def test_cor_004_nothing_reaches_shell_until_enter(app):
     assert state["blocks"] == []
 
 
+def test_open_quote_is_finished_by_the_next_submission(app):
+    app.type("echo don't")
+    app.key("return")
+    block = app.run("'")["blocks"][0]
+    assert block["command"] == "echo don't\n'"
+    assert block["output"] == "dont"
+
+
 def test_cor_008_typing_during_bootstrap_is_kept():
     with App() as app:
         app.type("echo early")
