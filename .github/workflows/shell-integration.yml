@@ -1,7 +1,7 @@
 name: Shell integration
 on:
   push:
-    branches: [initial-app, 'refactor/shell-integration-core', 'shell/**']
+    branches: [initial-app]
   pull_request:
   workflow_dispatch:
 
@@ -51,7 +51,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/shell-test-zig"
           tar -xJf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP/shell-test-zig" --strip-components=1
           echo "$RUNNER_TEMP/shell-test-zig" >> "$GITHUB_PATH"
-      - run: make build
+      - name: Build app and shell bridge
+        run: |
+          for attempt in 1 2 3; do
+            make deps && break
+            if [[ "$attempt" == 3 ]]; then exit 1; fi
+            sleep 5
+          done
+          make build
       - name: Existing zsh integration regressions
         run: make test FILTER='ZshIntegrationTests|TokenHandoffTests|RouterTests'
       - name: Test shared protocol on macOS
