@@ -58,6 +58,19 @@ struct ShellLexerTests {
 
 @Suite("Command history")
 struct CommandHistoryTests {
+    @Test("Leading-space submissions never reach suggestions or history search")
+    func privateSubmissions() {
+        let history = CommandHistory(entries: ["echo public"])
+        for command in [" echo secret", "  export TOKEN=private", " \necho private"] {
+            history.add(command)
+        }
+        #expect(history.entries == ["echo public"])
+        #expect(history.suggestion(for: "echo s") == nil)
+        #expect(history.matching(prefix: "", limit: 20) == ["echo public"])
+        history.add("echo ordinary  \n")
+        #expect(history.entries.last == "echo ordinary")
+    }
+
     @Test("A repeated command moves to the most recent position")
     func dedupes() {
         let history = CommandHistory(entries: ["a", "b", "a"])

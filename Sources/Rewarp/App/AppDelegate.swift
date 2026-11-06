@@ -4,7 +4,9 @@ import RewarpCore
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let theme = Theme.dusk
     private var controllers: [TerminalWindowController] = []
+    #if DEBUG || REWARP_TESTING
     private var control: ControlChannel?
+    #endif
     private var tabPosition = TabBarPosition.saved
     private let fonts = FontLibrary(pointSize: 13)
     private lazy var history: CommandHistory = {
@@ -23,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if let pane = controllers.first?.focusedPane {
             DebugScript.runIfRequested(view: pane.terminal, session: pane.session)
         }
+        #if DEBUG || REWARP_TESTING
         if let path = ProcessInfo.processInfo.environment["REWARP_CONTROL"] {
             let channel = ControlChannel(
                 path: path,
@@ -32,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             channel.start()
             control = channel
         }
+        #endif
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

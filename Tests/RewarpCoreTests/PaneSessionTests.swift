@@ -147,6 +147,11 @@ struct RouterTests {
 
 @Suite("Command encoding")
 struct EncodingTests {
+    @Test("Submitting a private command preserves its leading space for the shell")
+    func leadingSpace() {
+        #expect(PaneSession.encode(command: " echo private") == Array(" echo private\r".utf8))
+    }
+
     @Test("Single-line commands are sent as typed")
     func singleLine() {
         #expect(PaneSession.encode(command: "ls -la") == Array("ls -la\r".utf8))

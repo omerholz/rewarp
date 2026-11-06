@@ -8,10 +8,9 @@ let vtLinker: [LinkerSetting] = [
     .linkedLibrary("c++"),
 ]
 
-// Bounds checks are the wrong trade in a per-cell render loop that runs on every frame.
-let release: [SwiftSetting] = [.unsafeFlags(["-Ounchecked"], .when(configuration: .release))]
-
 // Without Xcode, SwiftPM does not look here for the Testing framework.
+// scripts/test.sh sets this only when the selected developer directory is CLT.
+let cltTesting = ProcessInfo.processInfo.environment["REWARP_CLT_TESTING"] == "1"
 let cltFrameworks = "/Library/Developer/CommandLineTools/Library/Developer/Frameworks"
 let cltInterop = "/Library/Developer/CommandLineTools/Library/Developer/usr/lib"
 
@@ -24,13 +23,13 @@ let package = Package(
             publicHeadersPath: "include",
             linkerSettings: vtLinker
         ),
-        .target(name: "RewarpCore", dependencies: ["CGhosttyVT"], swiftSettings: release),
-        .executableTarget(name: "Rewarp", dependencies: ["RewarpCore", "CGhosttyVT"], swiftSettings: release),
+        .target(name: "RewarpCore", dependencies: ["CGhosttyVT"]),
+        .executableTarget(name: "Rewarp", dependencies: ["RewarpCore", "CGhosttyVT"]),
         .testTarget(
             name: "RewarpCoreTests",
             dependencies: ["RewarpCore", "CGhosttyVT"],
-            swiftSettings: [.unsafeFlags(["-F", cltFrameworks])],
-            linkerSettings: [.unsafeFlags(["-F", cltFrameworks, "-framework", "Testing", "-Xlinker", "-rpath", "-Xlinker", cltFrameworks, "-Xlinker", "-rpath", "-Xlinker", cltInterop])]
+            swiftSettings: cltTesting ? [.unsafeFlags(["-F", cltFrameworks])] : [],
+            linkerSettings: cltTesting ? [.unsafeFlags(["-F", cltFrameworks, "-framework", "Testing", "-Xlinker", "-rpath", "-Xlinker", cltFrameworks, "-Xlinker", "-rpath", "-Xlinker", cltInterop])] : []
         ),
     ]
 )

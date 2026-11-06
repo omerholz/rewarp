@@ -1,0 +1,97 @@
+name: Security
+on:
+  push:
+    branches: [main, initial-app, 'security/**']
+  pull_request:
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+jobs:
+  macos-tests:
+    name: macOS tests and release isolation
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-zig
+      - run: make test
+      - name: Test normal release optimization
+        run: scripts/test.sh -c release
+      - name: Verify production build excludes automation
+        run: |
+          make app
+          python3 scripts/check-release.py dist/Rewarp.app/Contents/MacOS/Rewarp
+      - name: Run UI security regressions
+        run: make e2e FILTER=security_
+      - name: Run mutation fuzzing with AddressSanitizer
+        env:
+          REWARP_FUZZ_CASES: ${{ github.event_name == 'schedule' && '10000' || '1000' }}
+        run: scripts/fuzz.sh
+
+  codeql:
+    name: CodeQL Swift and C
+    # Private repositories require an eligible Code Security subscription.
+    if: github.event.repository.visibility == 'public' || vars.CODEQL_ENABLED == 'true'
+    runs-on: macos-15
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-zig
+      - run: scripts/build-ghostty-vt.sh
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+        with:
+          languages: swift,c-cpp
+          build-mode: manual
+          queries: security-extended
+      # A fresh scratch directory ensures both Swift and C are compiled under
+      # extraction. The separately built Zig library is outside CodeQL coverage.
+      - run: swift build --scratch-path .build/codeql --product Rewarp
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+
+  secrets:
+    name: Secrets in full fetched history
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: scripts/scan-secrets.sh
+
+  sonar:
+    name: SonarQube Cloud Swift
+    if: >-
+      vars.SONAR_ORGANIZATION != '' && vars.SONAR_PROJECT_KEY != '' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 # v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >-
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.qualitygate.wait=true

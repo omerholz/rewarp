@@ -71,13 +71,15 @@ print(f"{name:10} {mb / (end - start):8.0f} MB/s  ({end - start:.2f} s for {mb} 
 PY
 }
 
-swift build -c release --product Rewarp 2>&1 | tail -1
+# Keep automation in a separate build directory so it cannot be packaged by
+# bundle.sh, which makes its own fresh package build.
+swift build --scratch-path .build/bench -c release --product Rewarp -Xswiftc -DREWARP_TESTING 2>&1 | tail -1
 
 for run in 1 2 3; do
   result="$WORK/rewarp-$run"
   # A throwaway HOME, so that the user's startup files can't slow the run down or
   # stop it with a question, such as an update check.
-  HOME="$WORK" BENCH_RESULT="$result" REWARP_SEND="$WORK/inner.sh" .build/release/Rewarp >/dev/null 2>&1 &
+  HOME="$WORK" BENCH_RESULT="$result" REWARP_SEND="$WORK/inner.sh" .build/bench/release/Rewarp >/dev/null 2>&1 &
   pid=$!
   wait_for "$result" "$pid" || echo "rewarp run $run did not finish"
   kill "$pid" 2>/dev/null || true

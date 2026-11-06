@@ -1,0 +1,166 @@
+{
+  "reviews": [
+    {
+      "ghsa_id": "GHSA-jqr7-69mm-v35h",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:42:18Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "0af5c9e55c5b790de15aa7c7fcd90472b41c53cd",
+      "rationale": "The pinned libghostty-vt commit contains the upstream fix; GitHub compare confirms the fix is an ancestor (behind_by=0, status=ahead).",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/0af5c9e55c5b790de15aa7c7fcd90472b41c53cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-2r63-vmw6-3m3c",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:41:31Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-w9q4-5jvv-mcv4",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-28T02:36:04Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "e257bb45e6d4d61c14eacdc717be89c6110f99ff",
+      "rationale": "The pinned libghostty-vt commit contains the upstream fix; GitHub compare confirms the fix is an ancestor (behind_by=0, status=ahead).",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/e257bb45e6d4d61c14eacdc717be89c6110f99ff...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-hp9c-qp4q-cpw3",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-28T02:35:46Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-qjfx-r533-6vx3",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:42:20Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "65ff54c67df3d55e3ebf4dd31c7afa93c4cfb922",
+      "rationale": "The pinned libghostty-vt commit contains the upstream fix; GitHub compare confirms the fix is an ancestor (behind_by=0, status=ahead).",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/65ff54c67df3d55e3ebf4dd31c7afa93c4cfb922...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-3r5j-c6rj-xq2v",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:42:21Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "44c4c8f55d49e124f19492402a993978949f1326",
+      "rationale": "The pinned libghostty-vt commit contains the upstream fix; GitHub compare confirms the fix is an ancestor (behind_by=0, status=ahead).",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/44c4c8f55d49e124f19492402a993978949f1326...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-v8cw-fg4j-jcc4",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:41:38Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-mfw9-xcr3-7gfp",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:41:36Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-hcr9-7hcr-mjm8",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:41:33Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-4hwh-wx3w-3fqg",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:41:32Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-mxqx-236q-wrv7",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:41:37Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-mhff-mv4q-fp63",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:41:40Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-cw69-wm67-5pv8",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-10-27T16:41:41Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-4jxv-xgrp-5m3r",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2026-03-09T16:09:00Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-q9fg-cpmh-c78x",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2025-09-15T16:55:51Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-98wc-794w-gjx3",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2025-01-30T22:01:36Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-hfg5-8q2c-crhc",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2024-12-31T21:01:01Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    },
+    {
+      "ghsa_id": "GHSA-5hcq-3j4q-4v6p",
+      "commit": "86aef72a2c8e67c780867de2378b2fc4d6dcd9ca",
+      "updated_at": "2024-12-31T22:35:59Z",
+      "reviewed_on": "2026-11-06",
+      "fix_commit": "83fb95624b0439ee660c2679b43b38c8b63769cd",
+      "rationale": "The advisory lists a patched Ghostty release at or before v1.4.0. The pin descends from v1.4.0 (83fb95624b0439ee660c2679b43b38c8b63769cd), confirmed by GitHub compare. Rewarp embeds the VT library, not the Ghostty app; this review does not substitute for auditing Rewarp equivalents.",
+      "evidence": "https://github.com/ghostty-org/ghostty/compare/83fb95624b0439ee660c2679b43b38c8b63769cd...86aef72a2c8e67c780867de2378b2fc4d6dcd9ca"
+    }
+  ]
+}

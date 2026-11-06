@@ -21,6 +21,9 @@ public final class CommandHistory {
     }
 
     public func add(_ command: String) {
+        // A leading space opts out of Rewarp history even if the shell's own
+        // history policy differs. Inspect it before trimming away that signal.
+        guard !command.hasPrefix(" ") else { return }
         let trimmed = Self.trim(command)
         guard !trimmed.isEmpty else { return }
         entries.removeAll { $0 == trimmed }

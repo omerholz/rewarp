@@ -1,0 +1,33 @@
+name: Ghostty dependency monitoring
+on:
+  push:
+    branches: [main, initial-app, 'security/**']
+    paths:
+      - scripts/ghostty-version.env
+      - scripts/check-ghostty.py
+      - security/ghostty-advisory-reviews.json
+      - .github/workflows/ghostty.yml
+  pull_request:
+    paths:
+      - scripts/ghostty-version.env
+      - scripts/check-ghostty.py
+      - security/ghostty-advisory-reviews.json
+      - .github/workflows/ghostty.yml
+  schedule:
+    - cron: '43 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upstream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - run: python3 scripts/check-ghostty.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

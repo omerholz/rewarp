@@ -27,12 +27,16 @@ features. [Known limits](docs/design.md#known-limits) lists what to watch out fo
 
 ## Build
 
-You need macOS 14 or later, Zig 0.17 and the Xcode Command Line Tools. Full Xcode
+You need macOS 14 or later, Zig 0.17.0 and the Xcode Command Line Tools. Full Xcode
 isn't required.
 
 ```bash
 brew install zig
 ```
+
+The build checks the Zig version pinned in `scripts/ghostty-version.env`. If
+Homebrew provides another version, install the pinned toolchain from
+[Zig's downloads](https://ziglang.org/download/) and put its directory on `PATH`.
 
 Build the app and open it:
 
@@ -99,6 +103,11 @@ make e2e
 
 `make check` runs both, and `FILTER=name` narrows either one.
 
+Security regressions, release isolation, sanitizer mutation testing, dependency
+monitoring, and analyzer setup are described in [docs/security.md](docs/security.md).
+Run `make fuzz` on macOS for the longer terminal mutation campaign, or `make secrets`
+to scan all locally fetched Git history and the working tree for credentials.
+
 ## Parity with Warp
 
 [docs/warp-parity.md](docs/warp-parity.md) lists every non-AI Warp behaviour found
@@ -109,8 +118,10 @@ only by a passing end-to-end test whose name carries the item's ID, such as
 
 ## Performance
 
-Measured on one Mac by timing a `cat` of 256 MB, keeping 50,000 rows of scrollback,
-against Ghostty 1.4.0 on its default config:
+Earlier baseline, measured on one Mac by timing a `cat` of 256 MB, keeping 50,000
+rows of scrollback, against Ghostty 1.4.0 on its default config. These numbers
+predate the switch to checked Swift release optimization and Zig `ReleaseSafe`;
+the current defaults need to be benchmarked again:
 
 | Test | Rewarp | Ghostty |
 | --- | --- | --- |
@@ -138,3 +149,9 @@ shortcuts are matched from public docs and by using the app. Please don't copy f
 its source.
 
 The app bundles JetBrains Mono Nerd Font, under the SIL Open Font License.
+
+## License
+
+Rewarp is licensed under the [MIT License](LICENSE). Third-party code and fonts
+retain their own licenses. App bundles include Rewarp's and Ghostty's MIT notices
+and the bundled font's SIL Open Font License.

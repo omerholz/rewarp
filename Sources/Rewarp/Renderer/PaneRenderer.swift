@@ -138,6 +138,7 @@ final class PaneRenderer {
         commands.commit()
     }
 
+    #if DEBUG || REWARP_TESTING
     /// Renders off screen and returns the pixels, for debug captures.
     func capture(_ frame: Frame, glyphs: GlyphCache, chromeGlyphs: GlyphCache, clear: RGB,
                  width: Int, height: Int) -> CGImage? {
@@ -163,6 +164,7 @@ final class PaneRenderer {
             bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue),
             provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
     }
+    #endif
 
     private func encode(_ frame: Frame, glyphs: GlyphCache, chromeGlyphs: GlyphCache, clear: RGB,
                         target: MTLTexture, commands: MTLCommandBuffer) {
