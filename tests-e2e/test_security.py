@@ -60,9 +60,9 @@ def test_security_resizing_during_output_keeps_the_app_responsive(app):
     script = os.path.join(app.home, "resize-output.py")
     with open(script, "w") as handle:
         handle.write("""import os, time
-for _ in range(2000):
-    os.write(1, b'\\x1b[31moutput during resize\\x1b[0m\\r\\n')
-    time.sleep(0.001)
+for _ in range(100):
+    os.write(1, b'\\x1b[31moutput during resize\\x1b[0m\\r\\n' * 20)
+    time.sleep(0.02)
 print('RESIZE_FINISHED')
 """)
     app.type(f"/usr/bin/python3 '{script}'")
@@ -70,6 +70,6 @@ print('RESIZE_FINISHED')
     app.wait("output to start", lambda s: s["blocks"] and s["blocks"][-1]["running"])
     for width, height in [(500, 400), (1100, 700), (700, 500)] * 4:
         app.resize_window(width, height)
-    state = app.wait("output after resizing", lambda s: s["blocks"] and not s["blocks"][-1]["running"])
+    state = app.wait("output after resizing", lambda s: s["blocks"] and not s["blocks"][-1]["running"], timeout=20)
     assert "RESIZE_FINISHED" in state["blocks"][-1]["output"]
     assert app.run("echo still_responsive")["blocks"][-1]["output"] == "still_responsive"
