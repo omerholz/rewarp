@@ -128,7 +128,9 @@ public final class PaneSession {
             launch: launch, cols: cols, rows: rows,
             widthPx: cols * cellWidth, heightPx: rows * cellHeight)
         self.process = process
-        if let reportToken { tokenHandoff?.serve(token: reportToken, shell: process.pid) }
+        if let reportToken {
+            tokenHandoff?.serve(token: reportToken, shell: process.pid, helperPath: launch.integrationHelperPath)
+        }
         refreshBranch(for: workingDirectory)
         process.start(
             // Weak, because a pane can close while its shell is still printing.

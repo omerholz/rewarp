@@ -42,6 +42,18 @@ public enum ShellLaunch {
         return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
+    /// The bridge is installed beside the executable, including SwiftPM's test
+    /// bundle ancestors. Never resolve it through PATH or a working directory.
+    public static func integrationHelper() -> URL? {
+        guard var directory = Bundle.main.executableURL?.resolvingSymlinksInPath() else { return nil }
+        for _ in 0..<6 {
+            directory = directory.deletingLastPathComponent()
+            let candidate = directory.appendingPathComponent("RewarpShellBridge")
+            if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
+        }
+        return nil
+    }
+
     public static func login(
         workingDirectory: String,
         shell: String = userShell(),
@@ -58,11 +70,12 @@ public enum ShellLaunch {
         if env["LANG"] == nil { env["LANG"] = "en_US.UTF-8" }
 
         var token: String?
-        if name == "zsh", let integration {
+        if name == "zsh", let integration, let helper = integrationHelper() {
             // The script restores this straight away, so the user's shell never
             // sees a different ZDOTDIR.
             if let existing = env["ZDOTDIR"] { env["REWARP_USER_ZDOTDIR"] = existing }
             env["ZDOTDIR"] = integration.appendingPathComponent("zsh").path
+            env["REWARP_SHELL_HELPER"] = helper.path
             // Never in the environment. The shell asks for it through TokenHandoff.
             token = UUID().uuidString
         }

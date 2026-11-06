@@ -1,0 +1,64 @@
+name: Shell integration
+on:
+  push:
+    branches: [initial-app, 'refactor/shell-integration-core', 'shell/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shells-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Build and test shared protocol bridge
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -O2 Sources/RewarpShellBridge/main.c -o /tmp/RewarpShellBridge
+          REWARP_SHELL_BRIDGE=/tmp/RewarpShellBridge python3 Tests/ShellIntegration/test_bridge.py
+
+  macos-shells:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Install pinned Zig
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            arm64)
+              target=aarch64-macos
+              digest=b607e9b9234790a008116ae5bdb71c6243b84b9fb42a53a9e70fde41c06c536a
+              ;;
+            x86_64)
+              target=x86_64-macos
+              digest=4f9a1c5269aa17ebda5e6d3c2b89d6cbf36f7d2b22a0306e9ab98f25f95529c6
+              ;;
+            *) exit 1 ;;
+          esac
+          curl -fsSL --retry 3 "https://ziglang.org/download/0.17.0/zig-$target-0.17.0.tar.xz" -o "$RUNNER_TEMP/zig.tar.xz"
+          printf '%s  %s\n' "$digest" "$RUNNER_TEMP/zig.tar.xz" | shasum -a 256 -c
+          mkdir -p "$RUNNER_TEMP/shell-test-zig"
+          tar -xJf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP/shell-test-zig" --strip-components=1
+          echo "$RUNNER_TEMP/shell-test-zig" >> "$GITHUB_PATH"
+      - run: make build
+      - name: Existing zsh integration regressions
+        run: make test FILTER='ZshIntegrationTests|TokenHandoffTests'
+      - name: Test shared protocol on macOS
+        run: python3 Tests/ShellIntegration/test_bridge.py
+      - name: Fetch actual prompt-framework fixtures
+        run: scripts/fetch-shell-fixtures.sh
+      - name: Test real shell adapters on a PTY
+        run: python3 Tests/ShellIntegration/test_shell_adapters.py
+      - name: Run shell startup and Oh My Zsh tests
+        run: python3 tests-e2e/run.py shell_

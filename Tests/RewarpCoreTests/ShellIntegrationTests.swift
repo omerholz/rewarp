@@ -69,6 +69,60 @@ private final class Fixture {
 
 @Suite("Token handoff")
 struct TokenHandoffTests {
+    @Test("The bundled helper can bootstrap once, but later commands cannot retrieve the token")
+    func helperBootstrapIsSingleUse() throws {
+        let helper = try #require(ShellLaunch.integrationHelper())
+        let handoff = try #require(TokenHandoff())
+        handoff.serve(token: "test-private-token", shell: getpid(), helperPath: helper.path)
+
+        func request() throws -> (Int32, String) {
+            let process = Process()
+            process.executableURL = helper
+            process.arguments = ["token", handoff.path]
+            let output = Pipe()
+            process.standardOutput = output
+            try process.run()
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return (process.terminationStatus, String(decoding: data, as: UTF8.self))
+        }
+        // Being a child of the shell is insufficient: an ordinary program must
+        // not consume the bootstrap that belongs to the bundled helper.
+        let other = Process()
+        other.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        other.arguments = ["-c", "import socket,sys; s=socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); sys.stdout.buffer.write(s.recv(128))", handoff.path]
+        let otherOutput = Pipe()
+        other.standardOutput = otherOutput
+        try other.run()
+        let denied = otherOutput.fileHandleForReading.readDataToEndOfFile()
+        other.waitUntilExit()
+        #expect(other.terminationStatus == 0)
+        #expect(denied.isEmpty)
+        let first = try request()
+        #expect(first.0 == 0)
+        #expect(first.1 == "test-private-token\n")
+        let later = try request()
+        #expect(later.0 != 0)
+        #expect(later.1.isEmpty)
+    }
+
+    @Test("A helper is denied unless that bootstrap was explicitly enabled")
+    func helperIsNotImplicitlyTrusted() throws {
+        let helper = try #require(ShellLaunch.integrationHelper())
+        let handoff = try #require(TokenHandoff())
+        handoff.serve(token: "test-private-token", shell: getpid())
+        let process = Process()
+        process.executableURL = helper
+        process.arguments = ["token", handoff.path]
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        #expect(process.terminationStatus != 0)
+        #expect(data.isEmpty)
+    }
+
     @Test("A directory that can't hold the socket falls through to the next")
     func fallsThroughToADirectoryThatWorks() throws {
         // A shell that can't reach this has no blocks at all, so one bad TMPDIR can't be fatal.

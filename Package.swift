@@ -19,6 +19,7 @@ let package = Package(
     name: "Rewarp",
     platforms: [.macOS(.v14)],
     targets: [
+        .executableTarget(name: "RewarpShellBridge"),
         .target(
             name: "CGhosttyVT",
             publicHeadersPath: "include",

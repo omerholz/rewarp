@@ -23,6 +23,9 @@ Early, at version 0.0.1. What works today:
 Blocks and the input editor need shell integration, which only zsh has so far. Other
 shells run as a plain terminal.
 
+The [shell integration architecture and tests](docs/shell-integrations.md) cover
+normal startup files, custom ZDOTDIR, and a pinned, actual Oh My Zsh installation.
+
 Not built yet: settings, themes, bash and fish integration, session restore,
 workflows, launch configurations, Vim keybindings, inline images and the code
 features. [Known limits](docs/design.md#known-limits) lists what to watch out for.

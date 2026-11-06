@@ -9,6 +9,8 @@
 # `exec zsh` gets it the same way, and nothing else can get an answer.
 builtin typeset -g _rewarp_token= _rewarp_socket="$REWARP_SOCKET"
 builtin unset REWARP_SOCKET
+builtin typeset -g +x _rewarp_helper="$REWARP_SHELL_HELPER"
+builtin unset REWARP_SHELL_HELPER
 
 if [[ -n "$_rewarp_socket" && -o interactive ]] && builtin zmodload zsh/net/socket 2>/dev/null; then
   if zsocket "$_rewarp_socket" 2>/dev/null; then

@@ -28,17 +28,23 @@ last_state = {}
 
 
 class App:
-    def __init__(self, zshrc="", history="", shell=None):
+    def __init__(self, zshrc="", history="", shell="/bin/zsh", environment=None, startup_files=None):
         self.home = tempfile.mkdtemp(prefix="rewarp-e2e-")
         with open(os.path.join(self.home, ".zshrc"), "w") as f:
             f.write(zshrc)
         with open(os.path.join(self.home, ".zsh_history"), "w") as f:
             f.write(history)
+        for name, contents in (startup_files or {}).items():
+            path = os.path.join(self.home, name)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(contents)
         self.fifo = os.path.join(self.home, "control")
         os.mkfifo(self.fifo)
         env = dict(os.environ, HOME=self.home, TMPDIR=self.home, REWARP_CONTROL=self.fifo,
                    HISTFILE=os.path.join(self.home, ".zsh_history"))
         env.pop("ZDOTDIR", None)
+        env.update(environment or {})
         if shell:
             env["REWARP_SHELL"] = shell
         self.process = subprocess.Popen([BINARY], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=self.home)

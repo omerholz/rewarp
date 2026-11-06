@@ -26,10 +26,10 @@ deps: ## Build the pinned libghostty-vt (needs Zig, skipped when up to date)
 	@scripts/build-ghostty-vt.sh
 
 build: deps ## Build the debug binary
-	@swift build --product Rewarp
+	@swift build
 
 release: deps ## Build the optimized binary
-	@swift build -c release --product Rewarp
+	@swift build -c release
 
 test: deps ## Run the unit tests (FILTER=name narrows them)
 	@scripts/test.sh $(if $(FILTER),--filter "$(FILTER)")
