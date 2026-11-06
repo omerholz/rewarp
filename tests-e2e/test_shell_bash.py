@@ -37,3 +37,17 @@ def test_shell_bash_preserves_prompt_hooks_and_denies_later_token_requests():
         assert state["blocks"][-1]["output"] == "DENIED"
         app.run("mkdir subdirectory; cd subdirectory")
         assert app.run("pwd")["blocks"][-1]["output"] == os.path.join(app.home, "subdirectory")
+
+
+def test_shell_bash_interactive_input_and_interrupt_return_to_editor():
+    with App(shell=BASH) as app:
+        app.type("cat")
+        app.key("return")
+        app.wait("Bash running cat", lambda s: s["inputHidden"] and s["focus"] == "terminal")
+        app.type("interactive_input")
+        app.key("return")
+        app.wait("cat output", lambda s: "interactive_input" in s["blocks"][-1]["output"])
+        app.key("c", "ctrl")
+        state = app.wait("Bash prompt", lambda s: s["phase"] == "ready")
+        assert state["blocks"][-1]["exit"] == 130
+        assert app.run("echo after_interrupt")["blocks"][-1]["output"] == "after_interrupt"
