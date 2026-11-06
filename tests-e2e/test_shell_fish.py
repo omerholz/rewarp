@@ -31,7 +31,10 @@ def test_shell_fish_startup_blocks_status_and_completions():
         app.key("return")
         app.wait("Fish function", lambda s: s["blocks"][-1]["output"] == "fish_function")
         app.run("mkdir subdirectory; cd subdirectory")
-        assert app.run("pwd")["blocks"][-1]["output"] == os.path.join(app.home, "subdirectory")
+        directory = app.run("pwd")["blocks"][-1]["output"]
+        # Fish may canonicalize macOS's /var -> /private/var alias. Compare the
+        # actual directory, preserving validation of cd without imposing spelling.
+        assert os.path.samefile(directory, os.path.join(app.home, "subdirectory")), repr(directory)
 
 
 def test_shell_fish_prompt_changes_and_private_bootstrap():
