@@ -42,6 +42,8 @@ class App:
         self.fifo = os.path.join(self.home, "control")
         os.mkfifo(self.fifo)
         env = dict(os.environ, HOME=self.home, TMPDIR=self.home, REWARP_CONTROL=self.fifo,
+                   XDG_CONFIG_HOME=os.path.join(self.home, ".config"),
+                   XDG_DATA_HOME=os.path.join(self.home, ".local", "share"),
                    HISTFILE=os.path.join(self.home, ".zsh_history"))
         env.pop("ZDOTDIR", None)
         env.update(environment or {})

@@ -1,8 +1,13 @@
 # Shared by the zsh and bash adapters. Fish uses the same native protocol bridge.
 # Credentials stay unexported; the bridge receives them through an anonymous pipe.
 _rewarp_report() {
+  builtin local _rewarp_trace= _rewarp_result
+  case $- in *x*) _rewarp_trace=1; builtin set +x ;; esac
   { builtin printf '%s\n' "$_rewarp_token"; builtin printf '%s' "${2-}"; } |
     "$_rewarp_helper" report "$1"
+  _rewarp_result=$?
+  [ "$_rewarp_trace" != 1 ] || builtin set -x
+  return "$_rewarp_result"
 }
 
 _rewarp_report_environment() {

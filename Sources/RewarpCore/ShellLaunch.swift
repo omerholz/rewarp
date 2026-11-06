@@ -68,6 +68,7 @@ public enum ShellLaunch {
         let name = (shell as NSString).lastPathComponent
 
         var env = environment
+        env["SHELL"] = shell
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["TERM_PROGRAM"] = "Rewarp"
@@ -76,7 +77,8 @@ public enum ShellLaunch {
 
         var token: String?
         var bootstrapHelper: String?
-        if name == "zsh", let integration, let helper = integrationHelper() {
+        let integrationRoot = env["REWARP_SHELL_INTEGRATION"] == "none" ? nil : integration
+        if name == "zsh", let integration = integrationRoot, let helper = integrationHelper() {
             // The script restores this straight away, so the user's shell never
             // sees a different ZDOTDIR.
             if let existing = env["ZDOTDIR"] { env["REWARP_USER_ZDOTDIR"] = existing }
@@ -84,7 +86,7 @@ public enum ShellLaunch {
             env["REWARP_SHELL_HELPER"] = helper.path
             // Never in the environment. The shell asks for it through TokenHandoff.
             token = UUID().uuidString
-        } else if name == "bash", let integration, let helper = integrationHelper() {
+        } else if name == "bash", let integration = integrationRoot, let helper = integrationHelper() {
             let script = integration.appendingPathComponent("bash/bootstrap.bash")
             if FileManager.default.fileExists(atPath: script.path) {
                 if let existing = env["ENV"] {

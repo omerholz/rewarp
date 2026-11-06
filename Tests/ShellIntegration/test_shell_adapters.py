@@ -4,11 +4,17 @@ import shlex
 import shutil
 import unittest
 
-from shell_fixture import ROOT, ShellFixture
+from shell_fixture import REPORT, ROOT, TOKEN, ShellFixture
 
 
 @unittest.skipUnless(shutil.which("zsh"), "zsh is required")
 class ZshAdapterTests(unittest.TestCase):
+    def test_xtrace_does_not_print_the_integration_credential(self):
+        with ShellFixture(startup={".zshenv": "set -x\n", ".zshrc": "PROMPT='trace> '\n"}) as shell:
+            shell.ready()
+            shell.run("echo trace_works")
+            self.assertNotIn(TOKEN.encode(), REPORT.sub(b"", shell.output))
+
     def test_normal_login_files_status_and_alias_updates(self):
         with ShellFixture(startup={
             ".zshenv": "export TEST_ENV=env\n",

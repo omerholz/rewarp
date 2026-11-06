@@ -2,12 +2,17 @@
 
 Rewarp launches the account's configured login shell. The test harness explicitly
 selects a shell so tests do not depend on the CI host's account settings.
+`SHELL` reflects the selected executable. Set `REWARP_SHELL_INTEGRATION=none` to
+use the normal terminal without integration, for troubleshooting or custom shells.
 
 The app's stream router consumes the same authenticated `7701` protocol for every
 shell. `RewarpShellBridge` owns byte encoding and OSC framing; adapters pass the
 unexported credential and raw values through stdin, never through argv or the
 environment. Control characters, UTF-8 bytes, filenames, and multiline commands
 are encoded consistently in one implementation.
+Adapters can acknowledge a submitted command without reading or changing shell
+history: the router retains its sanitized submitted text until that authenticated
+start report. Returning to a prompt without preexec clears that pending label.
 
 `resources/shell-integration/common.sh` owns the POSIX-family command lifecycle
 and change detection for PATH, aliases, and functions. It ends the command before

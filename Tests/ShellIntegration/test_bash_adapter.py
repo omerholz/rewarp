@@ -1,4 +1,5 @@
 import shutil
+import socket
 import unittest
 
 from shell_fixture import ROOT, ShellFixture
@@ -15,7 +16,7 @@ class BashAdapterTests(unittest.TestCase):
         with self.shell({".bash_profile": 'export PROFILE_LOADED=yes\nsource "$HOME/.bashrc"\n',
                          ".bashrc": "HISTCONTROL=ignorespace\nPS1='custom> '\n"}) as shell:
             shell.ready()
-            if shell.helper_parents:
+            if hasattr(socket, "SO_PEERCRED"):
                 self.assertEqual(shell.helper_parents, [shell.pid])
             output, events = shell.run('printf "PROFILE:%s\\n" "$PROFILE_LOADED"')
             self.assertIn(b"PROFILE:yes", output)

@@ -38,6 +38,7 @@ class ShellFixture:
         self.stopped = threading.Event()
         env = {key: value for key, value in os.environ.items() if not key.startswith("REWARP_")}
         env.update(HOME=str(self.home), TERM="xterm-256color",
+                   XDG_CONFIG_HOME=str(self.home / ".config"), XDG_DATA_HOME=str(self.home / ".local/share"),
                    ZDOTDIR=str(ROOT / "resources/shell-integration/zsh"),
                    REWARP_SOCKET=str(self.home / "token.sock"), REWARP_SHELL_HELPER=BRIDGE)
         env.pop("REWARP_USER_ZDOTDIR", None)
@@ -46,12 +47,12 @@ class ShellFixture:
         if self.pid == 0:
             os.chdir(self.home)
             os.execvpe(shell, argv or ["-" + Path(shell).name], env)
+        self.helper_parents = []
         self.thread = threading.Thread(target=self.serve, daemon=True)
         self.thread.start()
         self.output = b""
         self.events = []
         self.parsed = 0
-        self.helper_parents = []
 
     def serve(self):
         while not self.stopped.is_set():
