@@ -1,0 +1,88 @@
+# Bash starts briefly in POSIX mode so ENV can run this before user files. The
+# login flag is retained; normal Bash mode and startup files are restored below.
+[[ $- == *i* ]] || return 0
+_rewarp_bootstrap_trace=0
+case $- in *x*) _rewarp_bootstrap_trace=1; builtin set +x ;; esac
+_rewarp_authenticated=0
+_rewarp_init=$REWARP_SHELL_INIT
+_rewarp_helper=$REWARP_SHELL_HELPER
+_rewarp_socket=$REWARP_SOCKET
+builtin export -n _rewarp_init _rewarp_helper _rewarp_socket _rewarp_token
+_rewarp_token=$(builtin exec "$_rewarp_helper" token "$_rewarp_socket" 2>/dev/null) || _rewarp_token=
+[[ -n $_rewarp_token ]] && _rewarp_authenticated=1
+if [[ ${REWARP_USER_ENV_SET-} == 1 ]]; then
+  ENV=$REWARP_USER_ENV
+  builtin export ENV
+else
+  builtin unset ENV
+fi
+builtin set +o posix
+if [[ ${REWARP_USER_POSIX_SET-} == 1 ]]; then
+  POSIXLY_CORRECT=$REWARP_USER_POSIX
+  builtin export POSIXLY_CORRECT
+  builtin set -o posix
+fi
+builtin unset REWARP_SOCKET REWARP_SHELL_HELPER REWARP_SHELL_INIT
+builtin unset REWARP_USER_ENV REWARP_USER_ENV_SET REWARP_USER_POSIX REWARP_USER_POSIX_SET
+builtin source -- "${_rewarp_init%/bash/*}/common.sh"
+(( _rewarp_authenticated )) && _rewarp_report hello
+(( _rewarp_bootstrap_trace )) && builtin set -x
+
+# --noprofile prevented these from running before the private bootstrap. Read
+# precisely the files an interactive Bash login shell normally chooses.
+[[ -r /etc/profile ]] && builtin source /etc/profile
+for _rewarp_profile in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+  if [[ -r $_rewarp_profile ]]; then
+    builtin source -- "$_rewarp_profile"
+    break
+  fi
+done
+builtin unset _rewarp_profile
+(( _rewarp_authenticated )) || return 0
+
+_rewarp_capture_status() {
+  _rewarp_status=$?
+  _rewarp_at_prompt=0
+  return "$_rewarp_status"
+}
+
+_rewarp_precmd() {
+  builtin local names name
+  names=$(builtin compgen -A alias)
+  names=${names//$'\n'/ }
+  while IFS= builtin read -r name; do
+    case "$name" in _*) ;; *) names="$names $name" ;; esac
+  done < <(builtin compgen -A function)
+  _rewarp_prompt "${_rewarp_status-0}" "$names"
+  [[ $PS1 == *'\[$(_rewarp_report ready)\]'* ]] || PS1=$PS1'\[$(_rewarp_report ready)\]'
+  if (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) )); then
+    [[ ${PS0-} == *'$(_rewarp_report start)'* ]] || PS0='$(_rewarp_report start)'${PS0-}
+  fi
+  _rewarp_running=1
+  _rewarp_at_prompt=1
+  return 0
+}
+
+# Preserve both scalar PROMPT_COMMAND and the array form supported by Bash 5.1+.
+if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )) &&
+    [[ $(builtin declare -p PROMPT_COMMAND 2>/dev/null) == 'declare -a'* ]]; then
+  PROMPT_COMMAND=('_rewarp_capture_status "$_"' "${PROMPT_COMMAND[@]}" '_rewarp_precmd')
+else
+  PROMPT_COMMAND='_rewarp_capture_status "$_"'$'\n'${PROMPT_COMMAND-}$'\n''_rewarp_precmd'
+fi
+
+# Bash 4.4+ has PS0, which runs once per accepted command. The system Bash 3.2
+# on macOS needs a DEBUG hook instead. Preserve a user's existing trap body.
+if (( BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4) )); then
+  _rewarp_debug() {
+    [[ ${_rewarp_at_prompt-0} == 1 && ${BASH_SUBSHELL-0} == 0 ]] || return 0
+    case $BASH_COMMAND in _rewarp_*) return 0 ;; esac
+    _rewarp_at_prompt=0
+    _rewarp_command_start ''
+  }
+  _rewarp_return_status() { return "$1"; }
+  _rewarp_prior_debug=$(builtin trap -p DEBUG)
+  builtin eval "_rewarp_trap_argv=(${_rewarp_prior_debug:-})"
+  _rewarp_prior_debug=${_rewarp_trap_argv[2]-:}
+  builtin trap '_rewarp_debug_status=$? _rewarp_debug_arg=$_; _rewarp_return_status "$_rewarp_debug_status" "$_rewarp_debug_arg"; '"$_rewarp_prior_debug"$'\n''_rewarp_debug_result=$?; _rewarp_debug; _rewarp_return_status "$_rewarp_debug_result" "$_rewarp_debug_arg"' DEBUG
+fi

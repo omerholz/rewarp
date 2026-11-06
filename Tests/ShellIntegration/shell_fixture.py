@@ -11,6 +11,7 @@ import re
 import select
 import signal
 import socket
+import struct
 import tempfile
 import threading
 import time
@@ -50,6 +51,7 @@ class ShellFixture:
         self.output = b""
         self.events = []
         self.parsed = 0
+        self.helper_parents = []
 
     def serve(self):
         while not self.stopped.is_set():
@@ -60,6 +62,11 @@ class ShellFixture:
             except OSError:
                 return
             with client:
+                if hasattr(socket, "SO_PEERCRED"):
+                    peer = struct.unpack("3i", client.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
+                    if peer != self.pid:
+                        status = Path(f"/proc/{peer}/status").read_text()
+                        self.helper_parents.append(int(re.search(r"^PPid:\s+(\d+)$", status, re.MULTILINE)[1]))
                 client.sendall((TOKEN + "\n").encode())
 
     def wait(self, predicate, timeout=12):

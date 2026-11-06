@@ -75,6 +75,7 @@ public enum ShellLaunch {
         if env["LANG"] == nil { env["LANG"] = "en_US.UTF-8" }
 
         var token: String?
+        var bootstrapHelper: String?
         if name == "zsh", let integration, let helper = integrationHelper() {
             // The script restores this straight away, so the user's shell never
             // sees a different ZDOTDIR.
@@ -83,11 +84,30 @@ public enum ShellLaunch {
             env["REWARP_SHELL_HELPER"] = helper.path
             // Never in the environment. The shell asks for it through TokenHandoff.
             token = UUID().uuidString
+        } else if name == "bash", let integration, let helper = integrationHelper() {
+            let script = integration.appendingPathComponent("bash/bootstrap.bash")
+            if FileManager.default.fileExists(atPath: script.path) {
+                if let existing = env["ENV"] {
+                    env["REWARP_USER_ENV"] = existing
+                    env["REWARP_USER_ENV_SET"] = "1"
+                }
+                if let existing = env["POSIXLY_CORRECT"] {
+                    env["REWARP_USER_POSIX"] = existing
+                    env["REWARP_USER_POSIX_SET"] = "1"
+                }
+                env["ENV"] = script.path
+                env["REWARP_SHELL_INIT"] = script.path
+                env["REWARP_SHELL_HELPER"] = helper.path
+                token = UUID().uuidString
+                bootstrapHelper = helper.path
+            }
         }
 
         // A leading dash in argv[0] is how a shell learns it is a login shell.
-        return PTYProcess.Launch(path: shell, argv: ["-\(name)"], environment: env,
-                                 workingDirectory: workingDirectory, integrationToken: token)
+        let arguments = name == "bash" && token != nil ? ["--noprofile", "--posix", "-i"] : []
+        return PTYProcess.Launch(path: shell, argv: ["-\(name)"] + arguments, environment: env,
+                                 workingDirectory: workingDirectory, integrationToken: token,
+                                 integrationHelperPath: bootstrapHelper)
     }
 }
 

@@ -59,6 +59,8 @@ jobs:
       - name: Fetch actual prompt-framework fixtures
         run: scripts/fetch-shell-fixtures.sh
       - name: Test real shell adapters on a PTY
-        run: python3 Tests/ShellIntegration/test_shell_adapters.py
+        run: |
+          python3 Tests/ShellIntegration/test_shell_adapters.py
+          python3 Tests/ShellIntegration/test_bash_adapter.py
       - name: Run shell startup and Oh My Zsh tests
         run: python3 tests-e2e/run.py shell_
