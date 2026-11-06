@@ -59,9 +59,10 @@ jobs:
       - name: Fetch actual prompt-framework fixtures
         run: scripts/fetch-shell-fixtures.sh
       - name: Test real shell adapters on a PTY
+        timeout-minutes: 3
         run: |
           python3 Tests/ShellIntegration/test_shell_adapters.py
-          REWARP_TEST_BASH=/bin/bash python3 Tests/ShellIntegration/test_bash_adapter.py
+          REWARP_TEST_BASH=/bin/bash python3 -u Tests/ShellIntegration/test_bash_adapter.py -v
       - name: Run shell startup and Oh My Zsh tests
         run: python3 tests-e2e/run.py shell_
       - name: Install current Bash for compatibility coverage

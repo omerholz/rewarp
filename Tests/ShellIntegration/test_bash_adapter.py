@@ -1,3 +1,4 @@
+import faulthandler
 import os
 import shutil
 import socket
@@ -38,13 +39,26 @@ class BashAdapterTests(unittest.TestCase):
             self.assertIn(b"login\r\n", output)
 
     def test_existing_debug_trap_and_xtrace_keep_working_without_disclosing_token(self):
-        with self.shell({".bash_profile": "trap 'DEBUG_SEEN=1' DEBUG\nset -x\n"}) as shell:
+        with self.shell({".bash_profile": "trap 'if [[ $BASH_COMMAND == *REWARP_DEBUG_SENTINEL* ]]; then DEBUG_SEEN=observed; fi' DEBUG\nset -x\n"}) as shell:
             shell.ready()
-            output, _ = shell.run('printf "DEBUG:%s\\n" "$DEBUG_SEEN"')
-            self.assertIn(b"DEBUG:1", output)
+            output, _ = shell.run(': REWARP_DEBUG_SENTINEL; printf "DEBUG:%s\\n" "$DEBUG_SEEN"')
+            self.assertIn(b"DEBUG:observed", output)
             _, events = shell.run("false")
             self.assertIn(("done", "1"), events)
             self.assertNotIn(TOKEN.encode(), REPORT.sub(b"", shell.output))
+
+    def test_profile_selected_history_file_and_prompt_status(self):
+        with self.shell({".bash_profile": 'HISTFILE="$HOME/custom_history"\nPS1=\'STATUS:$? > \'\n',
+                         "custom_history": "echo PREVIOUS_SESSION\n",
+                         ".bash_history": "echo UNSELECTED_HISTORY\n"}) as shell:
+            shell.ready()
+            output, _ = shell.run("history")
+            self.assertIn(b"echo PREVIOUS_SESSION", output)
+            self.assertNotIn(b"UNSELECTED_HISTORY", output)
+            self.assertNotIn(b"builtin source", output)
+            output, events = shell.run("false")
+            self.assertIn(("done", "1"), events)
+            self.assertIn(b"STATUS:1 >", output)
 
     def test_array_or_scalar_prompt_commands_preserve_each_user_action(self):
         config = '''
@@ -74,4 +88,5 @@ fi
 
 
 if __name__ == "__main__":
+    faulthandler.dump_traceback_later(45, repeat=True)
     unittest.main()
