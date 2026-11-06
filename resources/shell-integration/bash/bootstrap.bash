@@ -18,10 +18,11 @@ else
 fi
 if [[ ${REWARP_USER_HISTFILE_SET-} == 1 ]]; then
   HISTFILE=$REWARP_USER_HISTFILE
+  builtin export HISTFILE
 else
   HISTFILE=$HOME/.bash_history
+  builtin export -n HISTFILE
 fi
-builtin export HISTFILE
 builtin unset REWARP_SOCKET REWARP_SHELL_HELPER REWARP_SHELL_INIT
 builtin unset REWARP_USER_HISTCONTROL REWARP_USER_HISTCONTROL_SET REWARP_USER_HISTFILE REWARP_USER_HISTFILE_SET
 builtin source -- "${_rewarp_init%/bash/*}/common.sh"
