@@ -98,8 +98,11 @@ class ShellFixture:
         before = len(self.events)
         start = len(self.output)
         os.write(self.fd, command.encode() + b"\n")
-        self.wait(lambda events: any(key == "done" for key, _ in events[before:])
-                  and any(key == "ready" for key, _ in events[before:]), timeout)
+        def completed(events):
+            current = events[before:]
+            last_done = max((i for i, (key, _) in enumerate(current) if key == "done"), default=-1)
+            return last_done >= 0 and any(key == "ready" for key, _ in current[last_done + 1:])
+        self.wait(completed, timeout)
         return self.output[start:], self.events[before:]
 
     def close(self):
