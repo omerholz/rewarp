@@ -1,0 +1,43 @@
+"""Full Fish command editor, blocks, startup files, and completion routing."""
+import os
+import shutil
+
+from harness import App
+
+FISH = os.environ.get("REWARP_TEST_FISH", shutil.which("fish"))
+
+
+def test_shell_fish_startup_blocks_status_and_completions():
+    assert FISH, "install Fish before running its integration tests"
+    startup = {
+        ".config/fish/conf.d/example.fish": "set -gx FROM_CONF_D yes\n",
+        ".config/fish/config.fish": "set -gx FROM_CONFIG yes\nfunction rewarp_fish_function; echo fish_function; end\n",
+    }
+    with App(shell=FISH, startup_files=startup) as app:
+        state = app.run('echo "$FROM_CONF_D:$FROM_CONFIG"')
+        assert state["blocks"][-1]["output"] == "yes:yes"
+        command = "printf 'pipeline_output\\n' | cat"
+        state = app.run(command)
+        assert state["blocks"][-1]["command"] == command
+        assert state["blocks"][-1]["output"] == "pipeline_output"
+        assert app.run("false")["blocks"][-1]["exit"] == 1
+        assert app.run("echo $status")["blocks"][-1]["output"] == "1"
+        app.type("rewarp_fish_fun")
+        assert app.key("tab")["input"] == "rewarp_fish_function "
+        app.key("return")
+        app.wait("Fish function", lambda s: s["blocks"][-1]["output"] == "fish_function")
+        app.run("mkdir subdirectory; cd subdirectory")
+        assert app.run("pwd")["blocks"][-1]["output"] == os.path.join(app.home, "subdirectory")
+
+
+def test_shell_fish_prompt_changes_and_private_bootstrap():
+    assert FISH, "install Fish before running its integration tests"
+    with App(shell=FISH, startup_files={
+        ".config/fish/config.fish": "function fish_prompt; printf 'CUSTOM_PROMPT> '; end\n",
+    }) as app:
+        app.run("function fish_prompt; printf 'REPLACED> '; end")
+        assert app.run("echo after")["blocks"][-1]["output"] == "after"
+        state = app.run('if "$_rewarp_helper" token "$_rewarp_socket"; echo LEAKED; else; echo DENIED; end')
+        assert state["blocks"][-1]["output"] == "DENIED"
+        state = app.run("env | grep -c -E 'REWARP_(SOCKET|SHELL_HELPER|SHELL_INIT)'")
+        assert state["blocks"][-1]["output"] == "0"

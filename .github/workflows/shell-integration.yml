@@ -60,5 +60,9 @@ jobs:
         run: scripts/fetch-shell-fixtures.sh
       - name: Test real shell adapters on a PTY
         run: python3 Tests/ShellIntegration/test_shell_adapters.py
+      - name: Install Fish
+        run: brew install fish
+      - name: Test Fish startup and prompt hooks
+        run: python3 Tests/ShellIntegration/test_fish_adapter.py
       - name: Run shell startup and Oh My Zsh tests
         run: python3 tests-e2e/run.py shell_
