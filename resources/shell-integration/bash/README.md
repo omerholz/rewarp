@@ -4,8 +4,12 @@ Supports macOS system Bash 3.2 and current Bash, with command blocks, exit statu
 working-directory tracking, command/alias/function completions, and the Rewarp
 input editor. CI exercises both system Bash and a current Homebrew installation.
 
-The bootstrap obtains its private credential before running user startup files.
-It then restores Bash mode and ENV, reads `/etc/profile` and the first readable
+The app queues a trusted bootstrap line into an ordinary interactive login Bash
+started with `--noprofile`. This works on Apple Bash 3.2 as well as current Bash.
+The line is excluded from history, and history-file loading is deferred until
+the user's profile has selected its history settings. The bootstrap obtains its
+private credential before running user startup files. It then reads `/etc/profile`
+(or Apple's managed profile, when present) and the first readable
 `.bash_profile`, `.bash_login`, or `.profile`, and installs prompt hooks after the
 user's configuration. A profile that normally sources `.bashrc` still does so.
 

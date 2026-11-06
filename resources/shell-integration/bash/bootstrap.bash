@@ -30,7 +30,9 @@ builtin source -- "${_rewarp_init%/bash/*}/common.sh"
 
 # --noprofile prevented these from running before the private bootstrap. Read
 # precisely the files an interactive Bash login shell normally chooses.
-if [[ -r /etc/profile ]]; then
+if [[ $OSTYPE == darwin* && -f /private/var/db/ManagedConfigurationFiles/com.apple.bash/etc/profile ]]; then
+  builtin source /private/var/db/ManagedConfigurationFiles/com.apple.bash/etc/profile
+elif [[ -r /etc/profile ]]; then
   builtin source /etc/profile
 fi
 for _rewarp_profile in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
