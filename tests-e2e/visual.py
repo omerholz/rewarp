@@ -7,12 +7,15 @@ import sys
 import tempfile
 import time
 
-HOME = tempfile.mkdtemp(prefix="rewarp-visual-")
-fifo = os.path.join(HOME, "control")
+home = tempfile.mkdtemp(prefix="rewarp-visual-")
+fifo = os.path.join(home, "control")
 os.mkfifo(fifo)
 binary = sys.argv[1]
 script = json.loads(sys.argv[2])
-env = dict(os.environ, REWARP_CONTROL=fifo, REWARP_VISIBLE="1")
+env = {key: value for key, value in os.environ.items() if not key.startswith("REWARP_")}
+env.update(HOME=home, TMPDIR=home, HISTFILE=os.path.join(home, ".zsh_history"),
+           REWARP_CONTROL=fifo, REWARP_VISIBLE="1")
+env.pop("ZDOTDIR", None)
 process = subprocess.Popen([binary], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                            cwd=sys.argv[3] if len(sys.argv) > 3 else None, start_new_session=True)
 time.sleep(1.5)

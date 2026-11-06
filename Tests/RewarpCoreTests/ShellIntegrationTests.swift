@@ -409,3 +409,23 @@ struct SessionLifetimeTests {
         #expect(!FileManager.default.fileExists(atPath: marker.path))
     }
 }
+
+@Suite("Shell launch environment")
+struct ShellLaunchEnvironmentTests {
+    @Test("Automation is not inherited by commands or nested app launches")
+    func automationStaysInTheApp() {
+        let launch = ShellLaunch.login(
+            workingDirectory: "/tmp", shell: "/bin/zsh",
+            environment: ["HOME": "/tmp", "PATH": "/usr/bin:/bin", "ZDOTDIR": "/tmp/config",
+                          "REWARP_SEND": "echo replay", "REWARP_CONTROL": "/tmp/control",
+                          "REWARP_CAPTURE": "/tmp/capture.png", "REWARP_USER_ZDOTDIR": "/tmp/stale"],
+            integrationDirectory: URL(fileURLWithPath: "/tmp/integration"))
+        #expect(launch.environment["HOME"] == "/tmp")
+        #expect(launch.environment["REWARP_SEND"] == nil)
+        #expect(launch.environment["REWARP_CONTROL"] == nil)
+        #expect(launch.environment["REWARP_CAPTURE"] == nil)
+        #expect(launch.environment["REWARP_USER_ZDOTDIR"] == "/tmp/config")
+        #expect(launch.environment["ZDOTDIR"] == "/tmp/integration/zsh")
+        #expect(launch.hasIntegration)
+    }
+}

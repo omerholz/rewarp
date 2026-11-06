@@ -39,10 +39,15 @@ class App:
             f.write(history)
         self.fifo = os.path.join(self.home, "control")
         os.mkfifo(self.fifo)
-        env = dict(os.environ, HOME=self.home, TMPDIR=self.home, REWARP_CONTROL=self.fifo,
-                   REWARP_SHELL=shell or "/bin/zsh",
+        # A test must not inherit a command, capture path, or alternate shell
+        # from the environment of a different automated app invocation.
+        env = {key: value for key, value in os.environ.items() if not key.startswith("REWARP_")}
+        env.update(HOME=self.home, TMPDIR=self.home, REWARP_CONTROL=self.fifo,
                    HISTFILE=os.path.join(self.home, ".zsh_history"))
         env.pop("ZDOTDIR", None)
+        # Most tests exercise zsh integration, regardless of the login shell of
+        # the developer or CI account. Plain-shell tests pass an override.
+        env["REWARP_SHELL"] = shell or "/bin/zsh"
         self.process = subprocess.Popen([BINARY], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=self.home)
         self.writer = None
         deadline = time.time() + 10
@@ -171,4 +176,5 @@ class App:
         state = state or self.state()
         frame = self.frame(block_id, state)
         pane_x, pane_y = state["paneFrame"][0], state["paneFrame"][1]
-        return pane_x + 14 + column * 8 + 4, pane_y + frame["outputTop"] + row * 16 + 8
+        return (pane_x + 14 + (column + 0.5) * state["cellWidth"],
+                pane_y + frame["outputTop"] + (row + 0.5) * state["cellHeight"])

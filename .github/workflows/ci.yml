@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: Also try GUI end-to-end tests (requires a graphical session and Metal)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: make secrets
+      - name: Check scripts and Python syntax
+        run: |
+          for script in scripts/*.sh; do bash -n "$script"; done
+          python3 -m compileall -q scripts tests-e2e tests-tools
+      - name: Verify governance setup safety
+        run: python3 -m unittest discover -s tests-tools -v
+
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-zig
+      - name: Record toolchain
+        run: |
+          swift --version
+          zig version
+          xcode-select -p
+      - name: Check shell syntax
+        run: |
+          for script in resources/shell-integration/zsh/.zshenv resources/shell-integration/zsh/*.zsh; do
+            zsh -n "$script"
+          done
+      - run: make test
+      - name: Build and verify app bundle
+        run: |
+          make app
+          codesign --verify --deep --strict dist/Rewarp.app
+          test -f dist/Rewarp.app/Contents/Resources/Rewarp-LICENSE.txt
+          test -f dist/Rewarp.app/Contents/Resources/THIRD_PARTY_NOTICES.md
+          diff -r LICENSES dist/Rewarp.app/Contents/Resources/LICENSES
+      - name: GUI end-to-end tests (optional)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_e2e
+        run: |
+          make build
+          # Fail once if the runner cannot start the app, rather than timing out
+          # separately in every test when a graphical session/Metal is absent.
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "tests-e2e")
+          from harness import App
+          with App() as app:
+              app.ready()
+          PY
+          python3 tests-e2e/run.py

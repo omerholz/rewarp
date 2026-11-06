@@ -93,7 +93,7 @@ public final class PTYProcess {
                 }
             }
             var status: Int32 = 0
-            waitpid(pid, &status, 0)
+            while waitpid(pid, &status, 0) < 0 && errno == EINTR {}
             hasExited.withLock { $0 = true }
             onExit(status)
         }

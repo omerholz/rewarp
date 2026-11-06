@@ -410,6 +410,10 @@ final class PaneView: NSView {
             "followsTail": terminal.scroll.followsTail,
             "contentHeight": terminal.layout.contentHeight,
             "listHeight": terminal.listHeight,
+            "scale": terminal.scale,
+            // Frame coordinates are in points; cell dimensions use the same units.
+            "cellWidth": CGFloat(terminal.glyphs.cellWidth) / terminal.scale,
+            "cellHeight": CGFloat(terminal.glyphs.cellHeight) / terminal.scale,
             "blockFrames": terminal.debugBlockFrames(),
             "contextMenu": terminal.lastMenuTitles,
             "paneFrame": debugFrameInWindow(),

@@ -20,7 +20,7 @@ def test_blk_002_new_blocks_land_above_input_older_move_up(app):
     y_before = app.frame(1, first)["top"]
     second = app.run("echo two")
     assert app.frame(1, second)["top"] < y_before
-    assert app.frame(2, second)["bottom"] <= second["listHeight"] / 2 + 1
+    assert app.frame(2, second)["bottom"] <= second["listHeight"] / second["scale"] + 1
 
 
 def test_blk_023_failed_command_is_marked(app):
@@ -146,15 +146,18 @@ def test_blk_037_shift_arrows_extend(app):
 def test_mou_025_drag_makes_text_selection_not_block_selection(app):
     state = app.run("echo hello-world")
     x, y = app.point_in_output(1, column=0, state=state)
-    state = app.drag(x - 2, y, x + 8 * 5 - 4, y)
-    assert state["selectedText"] == "hello"
+    width = state["cellWidth"]
+    state = app.drag(x - width / 4, y, x + width * 4.5, y)
+    assert state["selectedText"] == "hello", repr(state["selectedText"])
     assert state["selected"] == []
 
 
 def test_mou_001_copy_on_select(app):
     state = app.run("echo hello-world")
     x, y = app.point_in_output(1, column=0, state=state)
-    assert app.drag(x - 2, y, x + 8 * 5 - 4, y)["pasteboard"] == "hello"
+    width = state["cellWidth"]
+    selected = app.drag(x - width / 4, y, x + width * 4.5, y)
+    assert selected["pasteboard"] == "hello", repr(selected["pasteboard"])
 
 
 def test_mou_024_triple_click_selects_line(app):
@@ -306,7 +309,8 @@ def test_long_output_is_kept_in_full(app):
 
 
 def test_a_tall_block_with_its_header_far_off_screen_keeps_drawing(app):
-    state = app.run("seq 1 3000")
+    # Keep the overflow regression above 70,000 device pixels even at scale 1.
+    state = app.run("seq 1 6000")
     assert state["contentHeight"] > 70000
     assert app.run("echo after")["blocks"][-1]["output"] == "after"
 
@@ -378,18 +382,23 @@ def test_a_shell_that_cant_get_its_token_ends_up_a_plain_terminal():
 
 
 def test_selection_in_a_filtered_running_block_outlives_its_refresh(app):
-    app.type("while true; do echo tick; sleep 0.05; done")
+    # The filter refreshes on a timer even without new output. Hold the command
+    # at read so its rows stay put while the selection is being made.
+    app.type("echo tick; read -r reply")
     app.key("return")
     app.wait("output", lambda s: s["blocks"] and "tick" in s["blocks"][0]["output"])
     app.key("f", "opt", "shift")
     app.bar_type("tick")
-    frame = app.wait("the block", lambda s: s["blockFrames"])["blockFrames"][0]
-    pane = app.state()["paneFrame"]
-    x = pane[0] + 14 + 2
-    y = pane[1] + frame["outputTop"] + 6
-    assert app.drag(x, y, x + 8 * 3, y)["selectedText"]
+    state = app.wait("filtered output and input to hide",
+                     lambda s: s["inputHidden"] and s["displayRows"] == ["tick"])
+    assert state["blocks"][0]["running"]
+    x, y = app.point_in_output(1, column=0, state=state)
+    width = state["cellWidth"]
+    assert app.drag(x - width / 4, y, x + width * 3.5, y)["selectedText"] == "tick"
     time.sleep(0.4)
-    assert app.state()["selectedText"]
+    refreshed = app.state()
+    assert refreshed["blocks"][0]["running"]
+    assert refreshed["selectedText"] == "tick"
     app.key("c", "ctrl")
 
 
