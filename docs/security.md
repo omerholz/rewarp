@@ -66,6 +66,17 @@ modes; it does not isolate Swift bounds-check overhead. Hosted-runner numbers
 should be followed by measurements on the user's Mac before changing product
 performance claims.
 
+On 2026-11-06, the [matched hosted ARM64 run](https://github.com/omerholz/rewarp/actions/runs/42247156720)
+compared `bf44d73` with `cf985c0`. Three 256 MiB runs produced these medians:
+
+| Workload | Base (MiB/s) | Hardened (MiB/s) |
+| --- | ---: | ---: |
+| Scroll | 50 | 58 |
+| Repaint | 46 | 70 |
+
+This run showed no throughput regression for those workloads. It does not
+establish a general speedup or isolate the cost of safety checks.
+
 A leading ASCII space opts a new submission out of Rewarp's in-memory history
 before trimming. The original command is still sent to the shell. This conservative
 rule is independent of shell options. It does not erase existing imported shell
@@ -82,6 +93,10 @@ CodeQL uses a manual macOS build with both `swift` and `c-cpp` extractors. Ghost
 is built before extraction. A fresh SwiftPM scratch directory ensures that both
 Swift and the C shim actually compile during extraction. Zig is outside CodeQL
 coverage. Do not restore compiled Swift targets into this build directory.
+Record the native architecture before initializing CodeQL and pass it to
+`swift build --arch`: Rosetta-based tracing can otherwise select an Intel build
+while the previously built Ghostty archive is ARM64. Both must target the same
+architecture.
 
 The repository was private when setup was inspected. CodeQL runs automatically
 for public repositories. For an eligible private repository with Code Security

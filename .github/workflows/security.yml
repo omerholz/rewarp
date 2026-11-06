@@ -52,7 +52,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-zig
-      - run: scripts/build-ghostty-vt.sh
+      - name: Build Ghostty and record its architecture before tracing
+        run: |
+          scripts/build-ghostty-vt.sh
+          printf 'REWARP_CODEQL_ARCH=%s\n' "$(uname -m)" >> "$GITHUB_ENV"
       - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           languages: swift,c-cpp
@@ -60,7 +63,7 @@ jobs:
           queries: security-extended
       # A fresh scratch directory ensures both Swift and C are compiled under
       # extraction. The separately built Zig library is outside CodeQL coverage.
-      - run: swift build --scratch-path .build/codeql --product Rewarp
+      - run: swift build --scratch-path .build/codeql --arch "$REWARP_CODEQL_ARCH" --product Rewarp
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
 
   secrets:
