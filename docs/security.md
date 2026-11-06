@@ -33,6 +33,9 @@ a controlling PTY on descriptors 0–2. The test wrapper raises the soft descrip
 limit before starting Swift so this regression can run on Macs that default to 256.
 It selects the extra Testing framework paths only for Command Line Tools;
 full-Xcode installations, including GitHub runners, use SwiftPM's normal setup.
+Leading-dash file completions use an explicit `./` prefix: shell quoting alone
+does not stop utilities from interpreting a filename as an option. A real-shell
+regression verifies that `cat` reads files named `-n` and `--help` literally.
 
 AddressSanitizer instruments the Swift code and C shim in the fuzz build. The Zig
 static library is built with `ReleaseSafe`; it is not AddressSanitizer-instrumented

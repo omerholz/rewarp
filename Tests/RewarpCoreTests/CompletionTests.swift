@@ -92,6 +92,27 @@ struct HostileCompletionTests {
         try text.write(to: url, atomically: true, encoding: .utf8)
     }
 
+    @Test("A completed filename is not interpreted as a program option", arguments: ["-n", "--help"])
+    func leadingDashFile(_ name: String) throws {
+        let sandbox = try Sandbox([name])
+        let contents = "literal file argument\n"
+        try write(contents, to: name, in: sandbox)
+        let completion = try #require(sandbox.complete("cat \(name)").items.first { $0.text == name })
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-f", "-c", "cat \(completion.insertion)"]
+        process.currentDirectoryURL = sandbox.root
+        process.standardInput = FileHandle.nullDevice
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = Pipe()
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
+        #expect(String(decoding: data, as: UTF8.self) == contents)
+    }
+
     @Test("A branch name can't run a command")
     func branch() throws {
         let sandbox = try Sandbox([".git/refs/heads/$(id)"])
