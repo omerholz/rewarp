@@ -49,6 +49,9 @@ class ShellFixture:
         if self.pid == 0:
             os.chdir(self.home)
             os.execvpe(shell, argv or ["-" + Path(shell).name], env)
+        # A readiness notification can race a read on Darwin. Keep the deadline
+        # effective even when a select-ready PTY has no bytes left to return.
+        os.set_blocking(self.fd, False)
         self.helper_parents = []
         self.thread = threading.Thread(target=self.serve, daemon=True)
         self.thread.start()
@@ -67,6 +70,7 @@ class ShellFixture:
             except OSError:
                 return
             with client:
+                client.settimeout(0.5)
                 if hasattr(socket, "SO_PEERCRED"):
                     peer = struct.unpack("3i", client.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
                     if peer != self.pid:
@@ -86,6 +90,8 @@ class ShellFixture:
             except OSError as error:
                 if error.errno == errno.EIO:
                     break
+                if error.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+                    continue
                 raise
             if not chunk:
                 break
@@ -111,7 +117,16 @@ class ShellFixture:
 
     def close(self):
         self.stopped.set()
+        self.thread.join(timeout=1)
         self.listener.close()
+        # A foreground child can hold the PTY open after its shell exits. Stop
+        # that job as well, before closing the master (which can block on macOS).
+        try:
+            foreground = os.tcgetpgrp(self.fd)
+            if foreground > 0:
+                os.killpg(foreground, signal.SIGHUP)
+        except (OSError, ProcessLookupError):
+            pass
         try:
             os.kill(self.pid, signal.SIGHUP)
         except ProcessLookupError:
