@@ -4,6 +4,7 @@ Native app tests separately verify peer credentials and UI routing. This peer is
 only a shell-adapter fixture; it intentionally does not emulate authentication.
 """
 import errno
+import faulthandler
 import os
 from pathlib import Path
 import pty
@@ -20,6 +21,7 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parents[2]
 BRIDGE = os.environ.get("REWARP_SHELL_BRIDGE", str(ROOT / ".build/debug/RewarpShellBridge"))
 TOKEN = "test-shell-token"
+faulthandler.dump_traceback_later(30, repeat=True)
 REPORT = re.compile(rb"\x1b\]7701;([a-z]+)=test-shell-token;([^\x07]*)\x07")
 
 
