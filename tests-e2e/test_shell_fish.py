@@ -45,3 +45,18 @@ def test_shell_fish_prompt_changes_and_private_bootstrap():
         assert state["blocks"][-1]["output"] == "DENIED"
         state = app.run("env | grep -c -E 'REWARP_(SOCKET|SHELL_HELPER|SHELL_INIT)'")
         assert state["blocks"][-1]["output"] == "0"
+
+
+def test_shell_fish_interactive_input_and_interrupt_return_to_editor():
+    assert FISH, "install Fish before running its integration tests"
+    with App(shell=FISH) as app:
+        app.type("cat")
+        app.key("return")
+        app.wait("Fish running cat", lambda s: s["inputHidden"] and s["focus"] == "terminal")
+        app.type("interactive_input")
+        app.key("return")
+        app.wait("cat output", lambda s: "interactive_input" in s["blocks"][-1]["output"])
+        app.key("c", "ctrl")
+        state = app.wait("Fish prompt", lambda s: s["phase"] == "ready")
+        assert state["blocks"][-1]["exit"] == 130
+        assert app.run("echo after_interrupt")["blocks"][-1]["output"] == "after_interrupt"

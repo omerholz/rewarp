@@ -20,7 +20,8 @@ final class FishIntegration {
             let fish = directory.appendingPathComponent("fish")
             let snippets = fish.appendingPathComponent("conf.d")
             try manager.createDirectory(at: snippets, withIntermediateDirectories: true)
-            try manager.createDirectory(at: user, withIntermediateDirectories: true)
+            try manager.createDirectory(at: user, withIntermediateDirectories: true,
+                                        attributes: [.posixPermissions: 0o700])
             // Fish resolves this symlink before atomically updating universal
             // variables, preserving synchronization with ordinary Fish sessions.
             let variables = user.appendingPathComponent("fish_variables")

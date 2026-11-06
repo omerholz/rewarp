@@ -70,6 +70,7 @@ jobs:
       - name: Install Fish
         run: brew install fish
       - name: Test Fish startup and prompt hooks
-        run: python3 Tests/ShellIntegration/test_fish_adapter.py
+        timeout-minutes: 3
+        run: python3 -u Tests/ShellIntegration/test_fish_adapter.py -v
       - name: Run shell startup and Oh My Zsh tests
         run: python3 tests-e2e/run.py shell_

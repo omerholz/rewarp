@@ -40,13 +40,12 @@ end
 for name in fish_function_path fish_complete_path
     set -l replacement
     for item in $$name
-        switch "$item"
-            case "$__fish_config_dir/functions"
-                set -a replacement "$_rewarp_user_config/functions"
-            case "$__fish_config_dir/completions"
-                set -a replacement "$_rewarp_user_config/completions"
-            case '*'
-                set -a replacement "$item"
+        if test "$item" = "$__fish_config_dir/functions"
+            set -a replacement "$_rewarp_user_config/functions"
+        else if test "$item" = "$__fish_config_dir/completions"
+            set -a replacement "$_rewarp_user_config/completions"
+        else
+            set -a replacement "$item"
         end
     end
     set -g $name $replacement
