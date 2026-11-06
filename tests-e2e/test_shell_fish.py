@@ -10,12 +10,16 @@ FISH = os.environ.get("REWARP_TEST_FISH", shutil.which("fish"))
 def test_shell_fish_startup_blocks_status_and_completions():
     assert FISH, "install Fish before running its integration tests"
     startup = {
+        ".config/fish/fish_variables": "# VERSION: 3.0\nSETUVAR rewarp_fixture_universal:original\n",
         ".config/fish/conf.d/example.fish": "set -gx FROM_CONF_D yes\n",
         ".config/fish/config.fish": "set -gx FROM_CONFIG yes\nfunction rewarp_fish_function; echo fish_function; end\n",
     }
     with App(shell=FISH, startup_files=startup) as app:
         state = app.run('echo "$FROM_CONF_D:$FROM_CONFIG"')
         assert state["blocks"][-1]["output"] == "yes:yes"
+        assert app.run("echo $rewarp_fixture_universal")["blocks"][-1]["output"] == "original"
+        app.run("set -U rewarp_fixture_universal updated")
+        assert app.run("fish -c 'echo $rewarp_fixture_universal'")["blocks"][-1]["output"] == "updated"
         command = "printf 'pipeline_output\\n' | cat"
         state = app.run(command)
         assert state["blocks"][-1]["command"] == command

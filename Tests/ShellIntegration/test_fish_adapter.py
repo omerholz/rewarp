@@ -24,6 +24,7 @@ class FishAdapterTests(unittest.TestCase):
             (snippets / "rewarp-bootstrap.fish").write_text('source "$REWARP_SHELL_INIT/bootstrap.fish"\n')
             (wrapper / "config.fish").write_text('if test -r "$_rewarp_user_config/config.fish"; source "$_rewarp_user_config/config.fish"; end\n')
             return {"REWARP_SHELL_INIT": str(script), "XDG_CONFIG_HOME": str(wrapper.parent),
+                    "XDG_DATA_DIRS": str(home / "vendor-data"),
                     "REWARP_USER_XDG_CONFIG_HOME": str(home / ".config"), "REWARP_USER_XDG_CONFIG_HOME_SET": "1"}
         return ShellFixture(shell=os.environ.get("REWARP_TEST_FISH", "fish"), startup=startup,
                             argv=["-fish", "--interactive", "--init-command",
@@ -59,6 +60,19 @@ class FishAdapterTests(unittest.TestCase):
             self.assertIn(b"SHARED:updated", output)
             self.assertTrue((shell.home / "wrapper/fish/fish_variables").is_symlink())
             self.assertIn("updated", (shell.home / ".config/fish/fish_variables").read_text())
+
+    def test_user_snippets_override_vendor_files_and_keep_their_real_location(self):
+        with self.shell({
+            ".config/fish/conf.d/example.fish": "set -gx SNIPPET_LOCATION (status dirname)\nset -gx PRECEDENCE user\n",
+            "vendor-data/fish/vendor_conf.d/example.fish": "set -gx PRECEDENCE vendor\n",
+            "vendor-data/fish/vendor_conf.d/vendor-only.fish": "set -gx VENDOR_ONLY yes\n",
+            ".config/fish/config.fish": "set -gx SEEN_IN_CONFIG $PRECEDENCE:$VENDOR_ONLY\n",
+        }) as shell:
+            shell.ready()
+            output, _ = shell.run('printf "ORDER:%s:%s\\n" "$PRECEDENCE" "$SEEN_IN_CONFIG"')
+            self.assertIn(b"ORDER:user:user:yes", output)
+            output, _ = shell.run('echo "LOCATION:$SNIPPET_LOCATION"')
+            self.assertIn(("LOCATION:" + str(shell.home / ".config/fish/conf.d")).encode(), output)
 
     def test_user_prompt_keeps_status_and_pipeline_status(self):
         with self.shell({".config/fish/config.fish": '''
