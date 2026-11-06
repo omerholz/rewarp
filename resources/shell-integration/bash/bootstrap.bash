@@ -1,5 +1,5 @@
-# Bash starts briefly in POSIX mode so ENV can run this before user files. The
-# login flag is retained; normal Bash mode and startup files are restored below.
+# A trusted first input line sources this into an ordinary interactive login
+# Bash with --noprofile. This also works around Apple Bash 3.2 ignoring POSIX ENV.
 [[ $- == *i* ]] || return 0
 _rewarp_bootstrap_trace=0
 case $- in *x*) _rewarp_bootstrap_trace=1; builtin set +x ;; esac
@@ -10,27 +10,29 @@ _rewarp_socket=$REWARP_SOCKET
 builtin export -n _rewarp_init _rewarp_helper _rewarp_socket _rewarp_token
 _rewarp_token=$(builtin exec "$_rewarp_helper" token "$_rewarp_socket" 2>/dev/null) || _rewarp_token=
 [[ -n $_rewarp_token ]] && _rewarp_authenticated=1
-if [[ ${REWARP_USER_ENV_SET-} == 1 ]]; then
-  ENV=$REWARP_USER_ENV
-  builtin export ENV
+if [[ ${REWARP_USER_HISTCONTROL_SET-} == 1 ]]; then
+  HISTCONTROL=$REWARP_USER_HISTCONTROL
+  builtin export HISTCONTROL
 else
-  builtin unset ENV
+  builtin unset HISTCONTROL
 fi
-builtin set +o posix
-if [[ ${REWARP_USER_POSIX_SET-} == 1 ]]; then
-  POSIXLY_CORRECT=$REWARP_USER_POSIX
-  builtin export POSIXLY_CORRECT
-  builtin set -o posix
+if [[ ${REWARP_USER_HISTFILE_SET-} == 1 ]]; then
+  HISTFILE=$REWARP_USER_HISTFILE
+else
+  HISTFILE=$HOME/.bash_history
 fi
+builtin export HISTFILE
 builtin unset REWARP_SOCKET REWARP_SHELL_HELPER REWARP_SHELL_INIT
-builtin unset REWARP_USER_ENV REWARP_USER_ENV_SET REWARP_USER_POSIX REWARP_USER_POSIX_SET
+builtin unset REWARP_USER_HISTCONTROL REWARP_USER_HISTCONTROL_SET REWARP_USER_HISTFILE REWARP_USER_HISTFILE_SET
 builtin source -- "${_rewarp_init%/bash/*}/common.sh"
 (( _rewarp_authenticated )) && _rewarp_report hello
 (( _rewarp_bootstrap_trace )) && builtin set -x
 
 # --noprofile prevented these from running before the private bootstrap. Read
 # precisely the files an interactive Bash login shell normally chooses.
-[[ -r /etc/profile ]] && builtin source /etc/profile
+if [[ -r /etc/profile ]]; then
+  builtin source /etc/profile
+fi
 for _rewarp_profile in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
   if [[ -r $_rewarp_profile ]]; then
     builtin source -- "$_rewarp_profile"
@@ -38,6 +40,7 @@ for _rewarp_profile in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile
   fi
 done
 builtin unset _rewarp_profile
+[[ -n ${HISTFILE-} && -r $HISTFILE ]] && builtin history -r "$HISTFILE"
 (( _rewarp_authenticated )) || return 0
 
 _rewarp_capture_status() {

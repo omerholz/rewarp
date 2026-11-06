@@ -32,17 +32,21 @@ public final class PTYProcess {
         /// Opts into a single authenticated helper bootstrap for shells without
         /// a native socket builtin. Zsh keeps its direct, PID-bound handoff.
         public var integrationHelperPath: String?
+        /// A trusted bootstrap line queued before any interactive user input.
+        public var integrationBootstrap: String?
 
         public var hasIntegration: Bool { integrationToken != nil }
 
         public init(path: String, argv: [String], environment: [String: String], workingDirectory: String?,
-                    integrationToken: String? = nil, integrationHelperPath: String? = nil) {
+                    integrationToken: String? = nil, integrationHelperPath: String? = nil,
+                    integrationBootstrap: String? = nil) {
             self.path = path
             self.argv = argv
             self.environment = environment
             self.workingDirectory = workingDirectory
             self.integrationToken = integrationToken
             self.integrationHelperPath = integrationHelperPath
+            self.integrationBootstrap = integrationBootstrap
         }
     }
 

@@ -10,8 +10,10 @@ from shell_fixture import REPORT, ROOT, TOKEN, ShellFixture
 class BashAdapterTests(unittest.TestCase):
     def shell(self, startup=None):
         script = ROOT / "resources/shell-integration/bash/bootstrap.bash"
-        return ShellFixture(shell=os.environ.get("REWARP_TEST_BASH", "bash"), argv=["-bash", "--noprofile", "--posix", "-i"],
-                            startup=startup, environment={"ENV": str(script), "REWARP_SHELL_INIT": str(script)})
+        return ShellFixture(shell=os.environ.get("REWARP_TEST_BASH", "bash"), argv=["-bash", "--noprofile", "-i"],
+                            startup=startup, environment={"REWARP_SHELL_INIT": str(script),
+                                                          "HISTCONTROL": "ignorespace", "HISTFILE": ""},
+                            initial_input=' builtin source -- "$REWARP_SHELL_INIT"\n')
 
     def test_login_files_blocks_status_and_private_history(self):
         with self.shell({".bash_profile": 'export PROFILE_LOADED=yes\nsource "$HOME/.bashrc"\n',
@@ -32,6 +34,8 @@ class BashAdapterTests(unittest.TestCase):
             self.assertNotIn(b" echo PRIVATE_HISTORY_SENTINEL", output)
             output, _ = shell.run('printf "HIST:%s\\n" "$HISTCONTROL"')
             self.assertIn(b"HIST:ignorespace", output)
+            output, _ = shell.run("shopt -q login_shell && echo login")
+            self.assertIn(b"login\r\n", output)
 
     def test_existing_debug_trap_and_xtrace_keep_working_without_disclosing_token(self):
         with self.shell({".bash_profile": "trap 'DEBUG_SEEN=1' DEBUG\nset -x\n"}) as shell:

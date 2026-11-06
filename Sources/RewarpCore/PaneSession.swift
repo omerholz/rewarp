@@ -134,6 +134,9 @@ public final class PaneSession {
         if let reportToken {
             tokenHandoff?.serve(token: reportToken, shell: process.pid, helperPath: launch.integrationHelperPath)
         }
+        if let bootstrap = launch.integrationBootstrap {
+            process.write(Array(bootstrap.utf8))
+        }
         refreshBranch(for: workingDirectory)
         process.start(
             // Weak, because a pane can close while its shell is still printing.

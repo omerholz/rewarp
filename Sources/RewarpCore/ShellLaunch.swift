@@ -89,15 +89,16 @@ public enum ShellLaunch {
         } else if name == "bash", let integration = integrationRoot, let helper = integrationHelper() {
             let script = integration.appendingPathComponent("bash/bootstrap.bash")
             if FileManager.default.fileExists(atPath: script.path) {
-                if let existing = env["ENV"] {
-                    env["REWARP_USER_ENV"] = existing
-                    env["REWARP_USER_ENV_SET"] = "1"
+                for key in ["HISTCONTROL", "HISTFILE"] {
+                    if let existing = env[key] {
+                        env["REWARP_USER_\(key)"] = existing
+                        env["REWARP_USER_\(key)_SET"] = "1"
+                    }
                 }
-                if let existing = env["POSIXLY_CORRECT"] {
-                    env["REWARP_USER_POSIX"] = existing
-                    env["REWARP_USER_POSIX_SET"] = "1"
-                }
-                env["ENV"] = script.path
+                // Hide the bootstrap from history and defer history-file loading
+                // until the user's profile has selected HISTFILE/HISTSIZE.
+                env["HISTCONTROL"] = "ignorespace"
+                env["HISTFILE"] = ""
                 env["REWARP_SHELL_INIT"] = script.path
                 env["REWARP_SHELL_HELPER"] = helper.path
                 token = UUID().uuidString
@@ -106,10 +107,12 @@ public enum ShellLaunch {
         }
 
         // A leading dash in argv[0] is how a shell learns it is a login shell.
-        let arguments = name == "bash" && token != nil ? ["--noprofile", "--posix", "-i"] : []
+        let bootstrapsBash = name == "bash" && token != nil
+        let arguments = bootstrapsBash ? ["--noprofile", "-i"] : []
         return PTYProcess.Launch(path: shell, argv: ["-\(name)"] + arguments, environment: env,
                                  workingDirectory: workingDirectory, integrationToken: token,
-                                 integrationHelperPath: bootstrapHelper)
+                                 integrationHelperPath: bootstrapHelper,
+                                 integrationBootstrap: bootstrapsBash ? " builtin source -- \"$REWARP_SHELL_INIT\"\n" : nil)
     }
 }
 
