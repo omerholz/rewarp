@@ -23,7 +23,7 @@ REPORT = re.compile(rb"\x1b\]7701;([a-z]+)=test-shell-token;([^\x07]*)\x07")
 
 
 class ShellFixture:
-    def __init__(self, shell="zsh", startup=None, environment=None):
+    def __init__(self, shell="zsh", startup=None, environment=None, argv=None):
         self.directory = tempfile.TemporaryDirectory(prefix="rw-shell-")
         self.home = Path(self.directory.name)
         for name, contents in (startup or {}).items():
@@ -44,7 +44,7 @@ class ShellFixture:
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
             os.chdir(self.home)
-            os.execvpe(shell, ["-zsh"], env)
+            os.execvpe(shell, argv or ["-" + Path(shell).name], env)
         self.thread = threading.Thread(target=self.serve, daemon=True)
         self.thread.start()
         self.output = b""

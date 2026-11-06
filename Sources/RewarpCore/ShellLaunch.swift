@@ -45,11 +45,16 @@ public enum ShellLaunch {
     /// The bridge is installed beside the executable, including SwiftPM's test
     /// bundle ancestors. Never resolve it through PATH or a working directory.
     public static func integrationHelper() -> URL? {
-        guard var directory = Bundle.main.executableURL?.resolvingSymlinksInPath() else { return nil }
-        for _ in 0..<6 {
-            directory = directory.deletingLastPathComponent()
-            let candidate = directory.appendingPathComponent("RewarpShellBridge")
-            if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
+        // XCTest's main bundle is the Xcode test host, not the package test
+        // bundle. The anchor locates the binary containing RewarpCore safely.
+        let bundles = [Bundle.main, Bundle(for: ShellIntegrationBundleAnchor.self)]
+        for bundle in bundles {
+            guard var directory = bundle.executableURL?.resolvingSymlinksInPath() else { continue }
+            for _ in 0..<6 {
+                directory = directory.deletingLastPathComponent()
+                let candidate = directory.appendingPathComponent("RewarpShellBridge")
+                if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
+            }
         }
         return nil
     }
@@ -85,3 +90,5 @@ public enum ShellLaunch {
                                  workingDirectory: workingDirectory, integrationToken: token)
     }
 }
+
+private final class ShellIntegrationBundleAnchor: NSObject {}

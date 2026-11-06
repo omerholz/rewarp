@@ -72,6 +72,9 @@ public final class PaneSession {
     private var pendingEvents: [RawEvent] = []
     /// Commands submitted before the shell could take them, oldest first.
     private var pendingCommands: [String] = []
+    /// A shell may acknowledge a command without reconstructing it from history.
+    /// Keep exactly what was sent until its authenticated start report arrives.
+    private var submittedCommand: String?
     private var awaitingStringTerminator = false
     private var pendingWrites: [[UInt8]] = []
     private var wasFullScreen = false
@@ -257,7 +260,9 @@ public final class PaneSession {
         post(.ready)
         // One at a time, so that each command starts from its own prompt.
         if !pendingCommands.isEmpty {
-            pendingWrites.append(Self.encode(command: pendingCommands.removeFirst()))
+            let bytes = Self.encode(command: pendingCommands.removeFirst())
+            submittedCommand = Self.commandText(from: bytes)
+            pendingWrites.append(bytes)
         }
     }
 
@@ -277,7 +282,9 @@ public final class PaneSession {
                 finishRunningBlock(exitCode: nil)
                 becomeReady()
             case .outputStart(let command):
-                startBlock(command: command)
+                let text = command.isEmpty ? (submittedCommand ?? "Shell command") : command
+                submittedCommand = nil
+                startBlock(command: text)
             case .commandEnd(let exitCode):
                 finishRunningBlock(exitCode: exitCode)
             }
@@ -316,10 +323,12 @@ public final class PaneSession {
     /// Runs a command at the prompt, or holds it until the shell is ready.
     public func submit(command: String) {
         lock.lock()
-        let ready = phase == .ready && pendingCommands.isEmpty
+        let ready = phase == .ready && pendingCommands.isEmpty && submittedCommand == nil
         if !ready { pendingCommands.append(command) }
+        let bytes = ready ? Self.encode(command: command) : []
+        if ready { submittedCommand = Self.commandText(from: bytes) }
         lock.unlock()
-        if ready { process?.write(Self.encode(command: command)) }
+        if ready { process?.write(bytes) }
     }
 
     /// A safety net for when the shell never reports that it's reading input, as
@@ -338,6 +347,7 @@ public final class PaneSession {
         lock.lock()
         let commands = pendingCommands
         pendingCommands.removeAll()
+        submittedCommand = nil
         lock.unlock()
         for command in commands { process?.write(Self.encode(command: command)) }
         requestFrame()
@@ -350,6 +360,16 @@ public final class PaneSession {
     static func encode(command: String) -> [UInt8] {
         let needsBrackets = command.unicodeScalars.contains { $0.value < 0x20 }
         return encodedPaste(command, bracketed: needsBrackets) + [0x0D]
+    }
+
+    private static func commandText(from encoded: [UInt8]) -> String {
+        var bytes = encoded.dropLast() // The submission's Enter key.
+        let open = Array("\u{1b}[200~".utf8)
+        let close = Array("\u{1b}[201~".utf8)
+        if bytes.starts(with: open), bytes.suffix(close.count).elementsEqual(close) {
+            bytes = bytes.dropFirst(open.count).dropLast(close.count)
+        }
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     // MARK: Layout

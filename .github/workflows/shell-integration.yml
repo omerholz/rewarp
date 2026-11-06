@@ -53,7 +53,7 @@ jobs:
           echo "$RUNNER_TEMP/shell-test-zig" >> "$GITHUB_PATH"
       - run: make build
       - name: Existing zsh integration regressions
-        run: make test FILTER='ZshIntegrationTests|TokenHandoffTests'
+        run: make test FILTER='ZshIntegrationTests|TokenHandoffTests|RouterTests'
       - name: Test shared protocol on macOS
         run: python3 Tests/ShellIntegration/test_bridge.py
       - name: Fetch actual prompt-framework fixtures

@@ -33,6 +33,27 @@ private func done(_ code: Int, terminator: String = bel) -> String {
 
 @Suite("Stream router")
 struct RouterTests {
+    @Test("Empty authenticated start reports use submitted text without changing shell history")
+    func submittedCommandText() {
+        let session = makeSession()
+        feed(session, promptStart + inputStart)
+        session.submit(command: " echo one | cat\n# two")
+        session.submit(command: "echo second")
+        feed(session, cmd(""))
+        #expect(session.blocks.first?.command == " echo one | cat\n# two")
+        feed(session, done(0) + promptStart + inputStart + cmd(""))
+        #expect(session.blocks.last?.command == "echo second")
+    }
+
+    @Test("Submitted command labels reflect the same control-byte sanitization as execution")
+    func submittedCommandSanitization() {
+        let session = makeSession()
+        feed(session, promptStart + inputStart)
+        session.submit(command: "echo hi\u{1b}x\u{7f}")
+        feed(session, cmd(""))
+        #expect(session.blocks.first?.command == "echo hi x ")
+    }
+
     @Test("Without shell integration everything goes to the shell terminal")
     func plain() {
         let session = makeSession()
