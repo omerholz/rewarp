@@ -33,6 +33,17 @@ private func done(_ code: Int, terminator: String = bel) -> String {
 
 @Suite("Stream router")
 struct RouterTests {
+    @Test("A submission rejected before preexec cannot stall the next command")
+    func syntaxRejectionDoesNotStall() {
+        let session = makeSession()
+        feed(session, promptStart + inputStart)
+        session.submit(command: "if then")
+        feed(session, promptStart + inputStart)
+        session.submit(command: "echo recovered")
+        feed(session, cmd(""))
+        #expect(session.blocks.first?.command == "echo recovered")
+    }
+
     @Test("Empty authenticated start reports use submitted text without changing shell history")
     func submittedCommandText() {
         let session = makeSession()

@@ -11,6 +11,7 @@ import re
 import select
 import signal
 import socket
+import struct
 import tempfile
 import threading
 import time
@@ -37,6 +38,7 @@ class ShellFixture:
         self.stopped = threading.Event()
         env = {key: value for key, value in os.environ.items() if not key.startswith("REWARP_")}
         env.update(HOME=str(self.home), TERM="xterm-256color",
+                   XDG_CONFIG_HOME=str(self.home / ".config"), XDG_DATA_HOME=str(self.home / ".local/share"),
                    ZDOTDIR=str(ROOT / "resources/shell-integration/zsh"),
                    REWARP_SOCKET=str(self.home / "token.sock"), REWARP_SHELL_HELPER=BRIDGE)
         env.pop("REWARP_USER_ZDOTDIR", None)
@@ -45,6 +47,7 @@ class ShellFixture:
         if self.pid == 0:
             os.chdir(self.home)
             os.execvpe(shell, argv or ["-" + Path(shell).name], env)
+        self.helper_parents = []
         self.thread = threading.Thread(target=self.serve, daemon=True)
         self.thread.start()
         self.output = b""
@@ -60,6 +63,11 @@ class ShellFixture:
             except OSError:
                 return
             with client:
+                if hasattr(socket, "SO_PEERCRED"):
+                    peer = struct.unpack("3i", client.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
+                    if peer != self.pid:
+                        status = Path(f"/proc/{peer}/status").read_text()
+                        self.helper_parents.append(int(re.search(r"^PPid:\s+(\d+)$", status, re.MULTILINE)[1]))
                 client.sendall((TOKEN + "\n").encode())
 
     def wait(self, predicate, timeout=12):

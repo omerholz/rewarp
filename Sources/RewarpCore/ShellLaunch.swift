@@ -68,6 +68,7 @@ public enum ShellLaunch {
         let name = (shell as NSString).lastPathComponent
 
         var env = environment
+        env["SHELL"] = shell
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
         env["TERM_PROGRAM"] = "Rewarp"
@@ -75,7 +76,8 @@ public enum ShellLaunch {
         if env["LANG"] == nil { env["LANG"] = "en_US.UTF-8" }
 
         var token: String?
-        if name == "zsh", let integration, let helper = integrationHelper() {
+        let integrationRoot = env["REWARP_SHELL_INTEGRATION"] == "none" ? nil : integration
+        if name == "zsh", let integration = integrationRoot, let helper = integrationHelper() {
             // The script restores this straight away, so the user's shell never
             // sees a different ZDOTDIR.
             if let existing = env["ZDOTDIR"] { env["REWARP_USER_ZDOTDIR"] = existing }

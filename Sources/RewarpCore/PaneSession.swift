@@ -276,6 +276,8 @@ public final class PaneSession {
             switch event {
             case .promptStart:
                 finishRunningBlock(exitCode: nil)
+                // A parse error can return to the prompt without a start report.
+                submittedCommand = nil
                 phase = .prompt
                 post(.promptStarted)
             case .inputStart:
