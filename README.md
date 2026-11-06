@@ -27,7 +27,7 @@ as a plain terminal; see the adapter documentation under
 The [shell integration architecture and tests](docs/shell-integrations.md) cover
 normal startup files, custom ZDOTDIR, and a pinned, actual Oh My Zsh installation.
 
-Not built yet: settings, themes, bash and fish integration, session restore,
+Not built yet: settings, themes, session restore,
 workflows, launch configurations, Vim keybindings, inline images and the code
 features. [Known limits](docs/design.md#known-limits) lists what to watch out for.
 
