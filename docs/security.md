@@ -93,6 +93,8 @@ CodeQL uses a manual macOS build with both `swift` and `c-cpp` extractors. Ghost
 is built before extraction. A fresh SwiftPM scratch directory ensures that both
 Swift and the C shim actually compile during extraction. Zig is outside CodeQL
 coverage. Do not restore compiled Swift targets into this build directory.
+The build includes every executable product so standalone native helpers are
+extracted along with the app and C shim.
 Record the native architecture before initializing CodeQL and pass it to
 `swift build --arch`: Rosetta-based tracing can otherwise select an Intel build
 while the previously built Ghostty archive is ARM64. Both must target the same

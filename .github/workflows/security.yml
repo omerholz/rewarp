@@ -63,7 +63,9 @@ jobs:
           queries: security-extended
       # A fresh scratch directory ensures both Swift and C are compiled under
       # extraction. The separately built Zig library is outside CodeQL coverage.
-      - run: swift build --scratch-path .build/codeql --arch "$REWARP_CODEQL_ARCH" --product Rewarp
+      # Build every executable so the shared C shell bridge is also extracted
+      # once the separate shell-refactor PR lands.
+      - run: swift build --scratch-path .build/codeql --arch "$REWARP_CODEQL_ARCH"
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
 
   secrets:
