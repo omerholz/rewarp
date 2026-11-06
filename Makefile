@@ -16,7 +16,7 @@ INSTALL_DIR ?= /Applications
 MB          ?= 512
 KIND        ?= scroll
 
-.PHONY: help deps build release test e2e check bench app run zip dmg package install clean distclean
+.PHONY: help deps build release test e2e check bench icons app run zip dmg package install clean distclean
 
 help: ## List these commands
 	@echo "Rewarp $(VERSION)"
@@ -41,6 +41,9 @@ check: test e2e ## Run every test
 
 bench: deps ## Compare throughput with Ghostty (MB=512, KIND=scroll or repaint)
 	@scripts/bench.sh $(MB) $(KIND)
+
+icons: ## Regenerate the macOS app icon from resources/icons/Rewarp.png
+	@scripts/build-icons.sh
 
 app: ## Assemble dist/Rewarp.app from a release build
 	@scripts/bundle.sh
