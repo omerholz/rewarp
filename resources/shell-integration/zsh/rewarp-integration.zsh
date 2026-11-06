@@ -81,3 +81,17 @@ _rewarp_preexec() {
 builtin autoload -Uz add-zsh-hook
 add-zsh-hook precmd _rewarp_precmd
 add-zsh-hook preexec _rewarp_preexec
+
+# Keeps all this through `exec zsh`, which is what `omz reload` runs. A new shell only
+# finds this directory through ZDOTDIR, and that can't stay exported, because
+# installers would write the user's .zshrc here. zsh runs no hook before exec, so
+# this sets it for the one process exec starts. It has to be an alias: a function
+# called exec would undo `exec 3>&1` when it returned, and one called zsh would lose
+# the -l of `exec -l zsh`. It's defined here, before the user's startup files,
+# because an alias only reaches functions parsed after it, and `omz reload` is one.
+# No token goes this way, because exec could be starting anything. The new shell
+# asks the app for it.
+if [[ -n "$_rewarp_socket" ]]; then
+  builtin typeset -g _rewarp_zdotdir="${${(%):-%x}:A:h}"
+  builtin alias exec='REWARP_USER_ZDOTDIR=${${(M)${(t)ZDOTDIR}:#*export*}:+$ZDOTDIR} ZDOTDIR=$_rewarp_zdotdir REWARP_SOCKET=$_rewarp_socket exec'
+fi

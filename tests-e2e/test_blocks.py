@@ -1,5 +1,7 @@
 """End-to-end checks of block behaviour. IDs refer to docs/warp-parity.md."""
 import os
+import shutil
+import tempfile
 import time
 
 from harness import App
@@ -41,6 +43,37 @@ def test_cor_008_typing_during_bootstrap_is_kept():
         app.key("return")
         state = app.wait("the early command", lambda s: len(s["blocks"]) == 1 and not s["blocks"][0]["running"])
         assert state["blocks"][0]["output"] == "early"
+
+
+def replaced_shell_settles(app):
+    return app.wait("the new shell's prompt", lambda s: s["phase"] == "ready" and not s["blocks"][-1]["running"])
+
+
+def test_exec_zsh_gets_back_to_blocks_and_the_input(app):
+    app.type("exec zsh")
+    app.key("return")
+    state = replaced_shell_settles(app)
+    assert [b["command"] for b in state["blocks"]] == ["exec zsh"]
+    assert not state["inputHidden"]
+    assert state["focus"] == "input"
+
+    state = app.run("echo after")
+    assert state["blocks"][-1]["output"] == "after"
+    assert state["blocks"][-1]["exit"] == 0
+
+
+def test_omz_reload_gets_back_to_blocks_and_the_input():
+    # What oh-my-zsh runs, which takes the login branch in a pane.
+    with App(zshrc="""reload() {
+      local zsh="$ZSH_ARGZERO"
+      [[ "${zsh#-}" != /* ]] && (( $+commands[zsh] )) && zsh="zsh"
+      [[ "$zsh" = -* || -o login ]] && exec -l "${zsh#-}" || exec "$zsh"
+    }""") as app:
+        app.ready()
+        app.type("reload")
+        app.key("return")
+        assert not replaced_shell_settles(app)["inputHidden"]
+        assert app.run("[[ -o login ]] && echo login")["blocks"][-1]["output"] == "login"
 
 
 def test_blk_032_click_selects_block(app):
@@ -321,6 +354,27 @@ def test_a_shell_without_integration_stays_a_plain_terminal():
         assert state["phase"] == "plain"
         assert state["display"] == "plain"
         assert state["blocks"] == []
+
+
+def test_a_shell_that_cant_get_its_token_ends_up_a_plain_terminal():
+    # Named zsh, so it's launched with integration, but it has no way to ask.
+    directory = tempfile.mkdtemp(prefix="rewarp-e2e-")
+    shell = os.path.join(directory, "zsh")
+    with open(shell, "w") as f:
+        f.write("#!/bin/sh\nunset REWARP_SOCKET\nexec /bin/zsh -il\n")
+    os.chmod(shell, 0o755)
+    try:
+        with App(shell=shell) as app:
+            app.wait("the terminal", lambda s: s["display"] == "plain" and s["focus"] == "terminal", timeout=10)
+            app.type("touch typed")
+            app.key("return")
+            deadline = time.time() + 5
+            while not os.path.exists(os.path.join(app.home, "typed")) and time.time() < deadline:
+                time.sleep(0.02)
+            assert os.path.exists(os.path.join(app.home, "typed"))
+            assert app.state()["phase"] == "plain"
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def test_selection_in_a_filtered_running_block_outlives_its_refresh(app):

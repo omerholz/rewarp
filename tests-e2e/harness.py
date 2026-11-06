@@ -1,7 +1,8 @@
 """Drives the real app through its control channel.
 
-Each App gets its own HOME, so nothing depends on this machine's dotfiles, and its
-own pasteboard, so the user's clipboard is never touched.
+Each App gets its own HOME, so nothing depends on this machine's dotfiles, its own
+pasteboard, so the user's clipboard is never touched, and its own TMPDIR, because a
+killed app leaves its sockets behind.
 """
 import json
 import os
@@ -35,7 +36,8 @@ class App:
             f.write(history)
         self.fifo = os.path.join(self.home, "control")
         os.mkfifo(self.fifo)
-        env = dict(os.environ, HOME=self.home, REWARP_CONTROL=self.fifo, HISTFILE=os.path.join(self.home, ".zsh_history"))
+        env = dict(os.environ, HOME=self.home, TMPDIR=self.home, REWARP_CONTROL=self.fifo,
+                   HISTFILE=os.path.join(self.home, ".zsh_history"))
         env.pop("ZDOTDIR", None)
         if shell:
             env["REWARP_SHELL"] = shell
