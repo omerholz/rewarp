@@ -1,4 +1,3 @@
-import faulthandler
 import os
 import shutil
 import socket
@@ -111,5 +110,4 @@ fi
 
 
 if __name__ == "__main__":
-    faulthandler.dump_traceback_later(45, repeat=True)
     unittest.main()
