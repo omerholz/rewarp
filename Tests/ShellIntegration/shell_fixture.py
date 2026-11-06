@@ -21,12 +21,14 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parents[2]
 BRIDGE = os.environ.get("REWARP_SHELL_BRIDGE", str(ROOT / ".build/debug/RewarpShellBridge"))
 TOKEN = "test-shell-token"
-faulthandler.dump_traceback_later(30, repeat=True)
 REPORT = re.compile(rb"\x1b\]7701;([a-z]+)=test-shell-token;([^\x07]*)\x07")
 
 
 class ShellFixture:
     def __init__(self, shell="zsh", startup=None, environment=None, argv=None, initial_input=None):
+        # The diagnostic timer is a native thread. It must not be running in
+        # forkpty's parent on macOS; start it only after the child has forked.
+        faulthandler.cancel_dump_traceback_later()
         self.directory = tempfile.TemporaryDirectory(prefix="rw-shell-")
         self.home = Path(self.directory.name)
         for name, contents in (startup or {}).items():
@@ -49,6 +51,7 @@ class ShellFixture:
         if self.pid == 0:
             os.chdir(self.home)
             os.execvpe(shell, argv or ["-" + Path(shell).name], env)
+        faulthandler.dump_traceback_later(30, repeat=True)
         # A readiness notification can race a read on Darwin. Keep the deadline
         # effective even when a select-ready PTY has no bytes left to return.
         os.set_blocking(self.fd, False)
@@ -153,6 +156,7 @@ class ShellFixture:
         os.close(self.fd)
         self.thread.join(timeout=1)
         self.directory.cleanup()
+        faulthandler.cancel_dump_traceback_later()
 
     def __enter__(self):
         return self
