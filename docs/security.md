@@ -58,7 +58,13 @@ that they cannot execute a command, open a FIFO, write files, or terminate the a
 
 Run `make bench MB=256 KIND=scroll` and `make bench MB=256 KIND=repaint` on the
 same Mac used for the baseline before updating performance claims. No macOS
-performance results were produced during the Linux implementation session.
+performance claim is inferred from unit-test timings. The pull-request release
+benchmark workflow compares three 256 MiB scroll and repaint runs for the base
+and head on the same macOS runner, and records medians in its job summary. This
+measures the complete hardening change, including both Swift and Zig optimization
+modes; it does not isolate Swift bounds-check overhead. Hosted-runner numbers
+should be followed by measurements on the user's Mac before changing product
+performance claims.
 
 A leading ASCII space opts a new submission out of Rewarp's in-memory history
 before trimming. The original command is still sent to the shell. This conservative

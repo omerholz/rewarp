@@ -1,0 +1,85 @@
+name: Release performance comparison
+on:
+  pull_request:
+    paths:
+      - Package.swift
+      - scripts/bench.sh
+      - .github/workflows/benchmark.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      REWARP_SHELL: /bin/zsh
+      BASE_COMMIT: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-zig
+      - name: Prepare base checkout
+        run: |
+          BENCH_BASE="$RUNNER_TEMP/rewarp-benchmark-base"
+          BENCH_LOGS="$RUNNER_TEMP/rewarp-benchmark-results"
+          printf 'BENCH_BASE=%s\nBENCH_LOGS=%s\n' "$BENCH_BASE" "$BENCH_LOGS" >> "$GITHUB_ENV"
+          git worktree add --detach "$BENCH_BASE" "$BASE_COMMIT"
+          mkdir -p "$BENCH_LOGS"
+      - name: Benchmark base release
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            make -C "$BENCH_BASE" deps && break
+            if [[ "$attempt" == 3 ]]; then exit 1; fi
+            sleep 5
+          done
+          "$BENCH_BASE/scripts/bench.sh" 256 scroll | tee "$BENCH_LOGS/base-scroll.txt"
+          "$BENCH_BASE/scripts/bench.sh" 256 repaint | tee "$BENCH_LOGS/base-repaint.txt"
+      - name: Benchmark hardened release
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            make deps && break
+            if [[ "$attempt" == 3 ]]; then exit 1; fi
+            sleep 5
+          done
+          scripts/bench.sh 256 scroll | tee "$BENCH_LOGS/head-scroll.txt"
+          scripts/bench.sh 256 repaint | tee "$BENCH_LOGS/head-repaint.txt"
+      - name: Summarize matched workloads
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, platform, re, statistics
+          from pathlib import Path
+          logs = Path(os.environ['BENCH_LOGS'])
+          lines = [
+              '# Release performance comparison',
+              f"Base: `{os.environ['BASE_COMMIT']}`; architecture: `{platform.machine()}`.",
+              'Three 256 MiB runs per workload and revision, on the same hosted macOS runner.',
+              'This compares all PR changes, including Swift and Ghostty optimization modes; it does not isolate Swift bounds-check overhead.',
+              'Hosted-runner results are not a substitute for measurements on a user Mac.',
+              '', '| Workload | Base median MiB/s | Head median MiB/s | Change |',
+              '| --- | ---: | ---: | ---: |',
+          ]
+          for workload in ('scroll', 'repaint'):
+              values = []
+              for revision in ('base', 'head'):
+                  path = logs / f'{revision}-{workload}.txt'
+                  data = path.read_text() if path.exists() else ''
+                  samples = [float(x) for x in re.findall(r'^Rewarp\s+(\d+)\s+MB/s', data, re.MULTILINE)]
+                  values.append(statistics.median(samples) if len(samples) == 3 else None)
+              if None in values:
+                  lines.append(f'| {workload} | incomplete | incomplete | — |')
+              else:
+                  base, head = values
+                  lines.append(f'| {workload} | {base:.0f} | {head:.0f} | {100 * (head / base - 1):+.1f}% |')
+          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('\n\n'.join(lines[:5]) + '\n\n' + '\n'.join(lines[5:]) + '\n')
+          PY
