@@ -43,5 +43,6 @@ The prompt-framework fixture is an actual, commit-pinned Oh My Zsh checkout. Tes
 use temporary homes and verify startup files, custom configuration directories,
 post-startup aliases, git-plugin loading, exit status, reload, and credential
 privacy. The shell-integration workflow runs both native protocol tests and real
-macOS app tests. Bash and fish adapters are separate follow-up PRs to this shared
-foundation; unsupported shells continue to use the ordinary terminal fallback.
+macOS app tests. Adapter-specific support and behavior are documented beside each
+startup script under `resources/shell-integration`; unsupported shells continue
+to use the ordinary terminal fallback.
