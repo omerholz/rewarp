@@ -30,9 +30,10 @@ enum MainMenu {
         let up = arrow(NSUpArrowFunctionKey)
         let down = arrow(NSDownArrowFunctionKey)
 
+        let about = NSMenuItem(title: "About Rewarp", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         let quit = NSMenuItem(title: "Quit Rewarp", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let hide = NSMenuItem(title: "Hide Rewarp", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        menu("Rewarp", [hide, .separator(), quit])
+        menu("Rewarp", [about, .separator(), hide, .separator(), quit])
 
         menu("File", [
             item("New Window", #selector(AppDelegate.newWindow), "n"),

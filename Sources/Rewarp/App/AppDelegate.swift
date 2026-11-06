@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppIcon.install()
         NSApp.mainMenu = MainMenu.make(target: self)
         installKeyRouter()
         newWindow()

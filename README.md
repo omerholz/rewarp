@@ -1,5 +1,7 @@
 # Rewarp
 
+<img src="resources/icons/Rewarp.png" width="128" alt="Rewarp app icon">
+
 A native macOS terminal with Warp's ergonomics and Ghostty's speed, and no AI.
 Built on [libghostty-vt](https://github.com/ghostty-org/ghostty) with a hand-written
 Metal renderer. See [docs/design.md](docs/design.md) for how it works and why.
@@ -51,6 +53,7 @@ Run `make` on its own to list every command. The main ones:
 | `make build` | Debug binary |
 | `make release` | Optimized binary |
 | `make app` | `dist/Rewarp.app` |
+| `make icons` | Regenerate the app icon from its source artwork |
 | `make install` | Copies the app to `/Applications` |
 | `make zip` | `dist/Rewarp-<version>.zip` |
 | `make dmg` | `dist/Rewarp-<version>.dmg` |
