@@ -50,7 +50,7 @@ struct ShellQuotingTests {
     static let hostile = [
         "$(touch /tmp/rewarp-pwned)", "`touch /tmp/rewarp-pwned`", "a;touch /tmp/rewarp-pwned", "a&&b", "a|b", "a>b",
         "a b", "it's", "say \"hi\"", "back\\slash", "$HOME", "${HOME}", "*", "?", "[a]", "{a,b}", "#hash", "~root",
-        "=ls", "!bang", "a=b", "^up", "tab\there".replacingOccurrences(of: "\t", with: "-"), "日本語", "(x)",
+        "=ls", "!bang", "a=b", "^up", "tab\there".replacingOccurrences(of: "\t", with: "-"), "日本語", "(x)", "%self",
     ]
 
     @Test("zsh reads every hostile name as one literal word", arguments: hostile)
@@ -61,6 +61,13 @@ struct ShellQuotingTests {
     @Test("bash reads every hostile name as one literal word", arguments: hostile)
     func bash(_ name: String) throws {
         #expect(try shellWords(ShellQuoting.escape(name), shell: "/bin/bash") == "<\(name)>")
+    }
+
+    @Test("fish reads every hostile name as one literal word",
+          .enabled(if: ProcessInfo.processInfo.environment["REWARP_TEST_FISH"] != nil), arguments: hostile)
+    func fish(_ name: String) throws {
+        let path = try #require(ProcessInfo.processInfo.environment["REWARP_TEST_FISH"])
+        #expect(try shellWords(ShellQuoting.escape(name), shell: path) == "<\(name)>")
     }
 
     @Test("A prefix of an escaped name is still valid on its own")

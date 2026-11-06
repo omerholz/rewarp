@@ -33,7 +33,8 @@ public enum ShellQuoting {
 
     private static func isLiteral(_ scalar: Unicode.Scalar) -> Bool {
         switch scalar {
-        case "a"..."z", "A"..."Z", "0"..."9", "_", "-", ".", "/", "+", ",", "@", ":", "%":
+        // Fish can expand %self to its PID, so percent signs must be escaped.
+        case "a"..."z", "A"..."Z", "0"..."9", "_", "-", ".", "/", "+", ",", "@", ":":
             return true
         default:
             return scalar.value >= 0xA0

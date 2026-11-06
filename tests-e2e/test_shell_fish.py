@@ -7,6 +7,17 @@ from harness import App
 FISH = os.environ.get("REWARP_TEST_FISH", shutil.which("fish"))
 
 
+def test_shell_fish_completes_percent_filename_literally():
+    assert FISH, "install Fish before running its integration tests"
+    with App(shell=FISH, startup_files={"%self": "literal_percent_file\n"}) as app:
+        app.type("cat %se")
+        assert app.key("tab")["input"] == r"cat \%self "
+        app.key("return")
+        state = app.wait("literal percent filename", lambda s: s["phase"] == "ready" and s["blocks"]
+                         and not s["blocks"][-1]["running"])
+        assert state["blocks"][-1]["output"] == "literal_percent_file"
+
+
 def test_shell_fish_startup_blocks_status_and_completions():
     assert FISH, "install Fish before running its integration tests"
     startup = {
