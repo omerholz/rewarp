@@ -33,7 +33,14 @@ private final class Sandbox {
 private func shellWords(_ line: String, shell: String) throws -> String {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: shell)
-    process.arguments = shell.hasSuffix("zsh") ? ["-f", "-c", "printf '<%s>' \(line)"] : ["-c", "printf '<%s>' \(line)"]
+    let command = "printf '<%s>' \(line)"
+    if shell.hasSuffix("zsh") {
+        process.arguments = ["-f", "-c", command]
+    } else if shell.hasSuffix("fish") {
+        process.arguments = ["--no-config", "-c", command]
+    } else {
+        process.arguments = ["-c", command]
+    }
     // If quoting ever fails, a hostile name like `a>b` really runs, and any file it
     // creates has to land somewhere disposable.
     process.currentDirectoryURL = FileManager.default.temporaryDirectory

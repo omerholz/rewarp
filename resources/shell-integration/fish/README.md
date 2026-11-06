@@ -23,6 +23,9 @@ replaced after startup are wrapped on the next prompt cycle.
 Rewarp receives command boundaries, exit status, working directory, PATH, and
 function/abbreviation names for its command editor, blocks, and suggestions.
 Fish retains execution, history, expansion, and its native interactive behavior.
+Shared completion quoting escapes percent signs so a filename such as `%self`
+cannot turn into Fish's process ID. Native literal-word and app completion tests
+cover this alongside shell metacharacters.
 Set `REWARP_SHELL_INTEGRATION=none` when launching Rewarp to use a plain terminal.
 
 Run `python3 Tests/ShellIntegration/test_fish_adapter.py` for real-PTY adapter
