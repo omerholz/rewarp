@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: Also try GUI end-to-end tests (requires a graphical session and Metal)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install checksum-verified Gitleaks 8.30.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools_dir="$(mktemp -d)"
+          curl -fsSL --retry 3 https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o "$tools_dir/gitleaks.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $tools_dir/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$tools_dir/gitleaks.tar.gz" -C "$tools_dir" gitleaks
+          echo "$tools_dir" >> "$GITHUB_PATH"
+      - run: make secrets
+      - name: Check scripts and Python syntax
+        run: |
+          for script in scripts/*.sh; do bash -n "$script"; done
+          python3 -m compileall -q scripts tests-e2e tests-tools
+      - name: Verify governance setup safety
+        run: python3 -m unittest discover -s tests-tools -v
+
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install checksum-verified Zig 0.17.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            arm64) zig_arch=aarch64; checksum=b607e9b9234790a008116ae5bdb71c6243b84b9fb42a53a9e70fde41c06c536a ;;
+            x86_64) zig_arch=x86_64; checksum=4f9a1c5269aa17ebda5e6d3c2b89d6cbf36f7d2b22a0306e9ab98f25f95529c6 ;;
+            *) exit 1 ;;
+          esac
+          tools_dir="$(mktemp -d)"
+          archive="$tools_dir/zig.tar.xz"
+          curl -fsSL --retry 3 "https://ziglang.org/download/0.17.0/zig-$zig_arch-macos-0.17.0.tar.xz" -o "$archive"
+          echo "$checksum  $archive" | shasum -a 256 -c -
+          tar -xf "$archive" -C "$tools_dir"
+          echo "$tools_dir/zig-$zig_arch-macos-0.17.0" >> "$GITHUB_PATH"
+      - name: Record toolchain
+        run: |
+          swift --version
+          zig version
+          xcode-select -p
+      - name: Check shell syntax
+        run: |
+          for script in resources/shell-integration/zsh/.zshenv resources/shell-integration/zsh/*.zsh; do
+            zsh -n "$script"
+          done
+      - run: make test
+      - name: Build and verify app bundle
+        run: |
+          make app
+          codesign --verify --deep --strict dist/Rewarp.app
+          test -f dist/Rewarp.app/Contents/Resources/LICENSE
+          test -f dist/Rewarp.app/Contents/Resources/THIRD_PARTY_NOTICES.md
+          diff -r LICENSES dist/Rewarp.app/Contents/Resources/LICENSES
+      - name: GUI end-to-end tests (optional)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_e2e
+        run: |
+          make build
+          # Fail once if the runner cannot start the app, rather than timing out
+          # separately in every test when a graphical session/Metal is absent.
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "tests-e2e")
+          from harness import App
+          with App() as app:
+              app.ready()
+          PY
+          python3 tests-e2e/run.py

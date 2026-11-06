@@ -1,0 +1,97 @@
+# Reports command boundaries and the working directory to Rewarp. These use a
+# private OSC with a token, rather than OSC 133 and OSC 7, because anything printed
+# to the terminal could send those. The user's prompt is never touched.
+
+builtin typeset -g _rewarp_running=0
+builtin typeset -g _rewarp_installed=0
+
+_rewarp_urlencode() {
+  builtin setopt local_options extended_glob
+  builtin local LC_ALL=C
+  REPLY=${1//(#m)[^A-Za-z0-9._~\/-]/%${(l:2::0:)$(( [##16] #MATCH ))}}
+}
+
+_rewarp_report() {
+  builtin printf '\e]7701;%s=%s;%s\a' "$1" "$_rewarp_token" "$2"
+}
+
+# Runs when the line editor starts reading, which is exactly when the shell can
+# accept a command. A marker in PS1 would be simpler, but prompt themes rewrite
+# PS1 on every prompt.
+_rewarp_line_init() {
+  [[ "$CONTEXT" == start ]] && _rewarp_report ready
+  (( ${+widgets[_rewarp_user_line_init]} )) && zle _rewarp_user_line_init -- "$@"
+  builtin return 0
+}
+
+# This wraps zle-line-init rather than using add-zle-hook-widget, because this has
+# to run first. Some prompts, such as oh-my-posh, run the whole line edit inside
+# their own zle-line-init, so anything chained after them would wait for Enter.
+_rewarp_wrap_line_init() {
+  builtin zmodload -F zsh/zleparameter 2>/dev/null
+  [[ "${widgets[zle-line-init]}" == user:_rewarp_line_init ]] && builtin return
+  if (( ${+widgets[zle-line-init]} )); then
+    zle -A zle-line-init _rewarp_user_line_init
+  fi
+  zle -N zle-line-init _rewarp_line_init
+}
+
+# The app can't see the shell's real environment, which matters most when it was
+# launched from Finder, so the parts completion needs are reported here.
+_rewarp_report_environment() {
+  [[ "$PATH" == "$_rewarp_reported_path" ]] && builtin return
+  _rewarp_reported_path="$PATH"
+  _rewarp_urlencode "$PATH"
+  _rewarp_report path "$REPLY"
+  _rewarp_urlencode "${(j: :)${(k)aliases}} ${(j: :)${(k)functions:#[_.+-]*}}"
+  _rewarp_report names "$REPLY"
+}
+
+_rewarp_precmd() {
+  builtin local exit_code=$?
+
+  if (( _rewarp_running )); then
+    _rewarp_report done "$exit_code"
+    _rewarp_running=0
+  fi
+
+  if (( ! _rewarp_installed )); then
+    _rewarp_installed=1
+    # PROMPT_SP pads the screen to detect output with no trailing newline. Every
+    # command has its own grid here, so all it would do is add a blank row.
+    builtin unsetopt PROMPT_SP
+  fi
+
+  # Done here, not at load time, because the user's startup files have all run by
+  # now. Repeated at every prompt in case something replaces it later.
+  _rewarp_wrap_line_init
+  _rewarp_report_environment
+
+  _rewarp_urlencode "$PWD"
+  _rewarp_report cwd "$REPLY"
+  _rewarp_report prompt
+}
+
+_rewarp_preexec() {
+  _rewarp_urlencode "$1"
+  _rewarp_report start "$REPLY"
+  _rewarp_running=1
+}
+
+builtin autoload -Uz add-zsh-hook
+add-zsh-hook precmd _rewarp_precmd
+add-zsh-hook preexec _rewarp_preexec
+
+# Keeps all this through `exec zsh`, which is what `omz reload` runs. A new shell only
+# finds this directory through ZDOTDIR, and that can't stay exported, because
+# installers would write the user's .zshrc here. zsh runs no hook before exec, so
+# this sets it for the one process exec starts. It has to be an alias: a function
+# called exec would undo `exec 3>&1` when it returned, and one called zsh would lose
+# the -l of `exec -l zsh`. It's defined here, before the user's startup files,
+# because an alias only reaches functions parsed after it, and `omz reload` is one.
+# No token goes this way, because exec could be starting anything. The new shell
+# asks the app for it.
+if [[ -n "$_rewarp_socket" ]]; then
+  builtin typeset -g _rewarp_zdotdir="${${(%):-%x}:A:h}"
+  builtin alias exec='REWARP_USER_ZDOTDIR=${${(M)${(t)ZDOTDIR}:#*export*}:+$ZDOTDIR} ZDOTDIR=$_rewarp_zdotdir REWARP_SOCKET=$_rewarp_socket exec'
+fi

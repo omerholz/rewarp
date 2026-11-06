@@ -1,0 +1,79 @@
+import Darwin
+import Foundation
+
+public enum ShellLaunch {
+    /// The user's login shell from the password database. $SHELL is not
+    /// reliable for an app launched from Finder. REWARP_SHELL overrides it, which
+    /// is how tests reach shells that have no integration.
+    public static func userShell() -> String {
+        if let override = ProcessInfo.processInfo.environment["REWARP_SHELL"] { return override }
+        if let entry = getpwuid(getuid()), let shell = entry.pointee.pw_shell {
+            let path = String(cString: shell)
+            if !path.isEmpty { return path }
+        }
+        return "/bin/zsh"
+    }
+
+    /// Where a new session starts. $HOME wins, as it does for the shell itself.
+    public static let homeDirectory =
+        ProcessInfo.processInfo.environment["HOME"] ?? FileManager.default.homeDirectoryForCurrentUser.path
+
+    /// A path as a shell prompt shows it, with the home directory as ~.
+    public static func abbreviate(path: String) -> String {
+        if path == homeDirectory { return "~" }
+        return path.hasPrefix(homeDirectory + "/") ? "~" + path.dropFirst(homeDirectory.count) : path
+    }
+
+    /// Where the integration scripts live: in the app bundle when packaged, or
+    /// in the repo for a development build.
+    public static func integrationDirectory() -> URL? {
+        var candidates: [URL] = []
+        if let resources = Bundle.main.resourceURL {
+            candidates.append(resources.appendingPathComponent("shell-integration"))
+        }
+        // The real executable, because argv[0] can be relative to a directory the
+        // user doesn't trust, and what's found here runs as shell startup files.
+        if var directory = Bundle.main.executableURL?.resolvingSymlinksInPath() {
+            for _ in 0..<6 {
+                directory = directory.deletingLastPathComponent()
+                candidates.append(directory.appendingPathComponent("resources/shell-integration"))
+            }
+        }
+        return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    public static func login(
+        workingDirectory: String,
+        shell: String = userShell(),
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        integrationDirectory integration: URL? = integrationDirectory()
+    ) -> PTYProcess.Launch {
+        let name = (shell as NSString).lastPathComponent
+
+        var env = environment
+        // Automation belongs to this app invocation. A Rewarp launched from a
+        // pane must not replay its parent's test command or control channel.
+        for key in env.keys.filter({ $0.hasPrefix("REWARP_") }) {
+            env.removeValue(forKey: key)
+        }
+        env["TERM"] = "xterm-256color"
+        env["COLORTERM"] = "truecolor"
+        env["TERM_PROGRAM"] = "Rewarp"
+        env["TERM_PROGRAM_VERSION"] = RewarpVersion.string
+        if env["LANG"] == nil { env["LANG"] = "en_US.UTF-8" }
+
+        var token: String?
+        if name == "zsh", let integration {
+            // The script restores this straight away, so the user's shell never
+            // sees a different ZDOTDIR.
+            if let existing = env["ZDOTDIR"] { env["REWARP_USER_ZDOTDIR"] = existing }
+            env["ZDOTDIR"] = integration.appendingPathComponent("zsh").path
+            // Never in the environment. The shell asks for it through TokenHandoff.
+            token = UUID().uuidString
+        }
+
+        // A leading dash in argv[0] is how a shell learns it is a login shell.
+        return PTYProcess.Launch(path: shell, argv: ["-\(name)"], environment: env,
+                                 workingDirectory: workingDirectory, integrationToken: token)
+    }
+}
