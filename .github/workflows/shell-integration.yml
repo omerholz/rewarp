@@ -68,5 +68,12 @@ jobs:
       - name: Test real shell adapters on a PTY
         timeout-minutes: 3
         run: python3 -u Tests/ShellIntegration/test_shell_adapters.py -v
+      - name: Install Fish
+        run: brew install fish
+      - name: Test Fish startup and prompt hooks
+        timeout-minutes: 3
+        run: |
+          python3 -u Tests/ShellIntegration/test_fish_adapter.py -v
+          REWARP_TEST_FISH="$(brew --prefix fish)/bin/fish" make test FILTER=ShellQuotingTests
       - name: Run shell startup and Oh My Zsh tests
         run: python3 tests-e2e/run.py shell_

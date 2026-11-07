@@ -32,6 +32,7 @@ public final class PTYProcess {
         /// Opts into a single authenticated helper bootstrap for shells without
         /// a native socket builtin. Zsh keeps its direct, PID-bound handoff.
         public var integrationHelperPath: String?
+        var fishIntegration: FishIntegration?
 
         public var hasIntegration: Bool { integrationToken != nil }
 
@@ -48,6 +49,7 @@ public final class PTYProcess {
 
     public let pid: pid_t
     private let descriptor: Descriptor
+    private let fishIntegration: FishIntegration?
     /// Set once the child has been reaped, after which its pid could belong to
     /// something else and must not be signalled.
     private let hasExited = OSAllocatedUnfairLock(initialState: false)
@@ -71,6 +73,7 @@ public final class PTYProcess {
         }
         descriptor = Descriptor(result)
         pid = outPid
+        fishIntegration = launch.fishIntegration
     }
 
     deinit {
@@ -83,7 +86,11 @@ public final class PTYProcess {
         let descriptor = self.descriptor
         let hasExited = self.hasExited
         let pid = self.pid
+        let fishIntegration = self.fishIntegration
         let reader = Thread {
+            // Fish may save universal variables from an exit handler. Keep its
+            // wrapper alive until the shell has actually been reaped.
+            defer { withExtendedLifetime(fishIntegration) {} }
             let fd = descriptor.value
             let capacity = 256 * 1024
             let buffer = UnsafeMutableRawPointer.allocate(byteCount: capacity, alignment: 16)

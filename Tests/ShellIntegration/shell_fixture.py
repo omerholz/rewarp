@@ -46,7 +46,7 @@ class ShellFixture:
                    ZDOTDIR=str(ROOT / "resources/shell-integration/zsh"),
                    REWARP_SOCKET=str(self.home / "token.sock"), REWARP_SHELL_HELPER=BRIDGE)
         env.pop("REWARP_USER_ZDOTDIR", None)
-        env.update(environment or {})
+        env.update(environment(self.home) if callable(environment) else (environment or {}))
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
             os.chdir(self.home)
