@@ -25,7 +25,7 @@ REPORT = re.compile(rb"\x1b\]7701;([a-z]+)=test-shell-token;([^\x07]*)\x07")
 
 
 class ShellFixture:
-    def __init__(self, shell="zsh", startup=None, environment=None, argv=None):
+    def __init__(self, shell="zsh", startup=None, environment=None, argv=None, initial_input=None):
         # The diagnostic timer is a native thread. It must not be running in
         # forkpty's parent on macOS; start it only after the child has forked.
         faulthandler.cancel_dump_traceback_later()
@@ -58,6 +58,8 @@ class ShellFixture:
         self.helper_parents = []
         self.thread = threading.Thread(target=self.serve, daemon=True)
         self.thread.start()
+        if initial_input:
+            os.write(self.fd, initial_input.encode())
         self.output = b""
         self.events = []
         self.parsed = 0

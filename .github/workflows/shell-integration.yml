@@ -68,5 +68,16 @@ jobs:
       - name: Test real shell adapters on a PTY
         timeout-minutes: 3
         run: python3 -u Tests/ShellIntegration/test_shell_adapters.py -v
+      - name: Test macOS system Bash
+        timeout-minutes: 3
+        run: REWARP_TEST_BASH=/bin/bash python3 -u Tests/ShellIntegration/test_bash_adapter.py -v
       - name: Run shell startup and Oh My Zsh tests
         run: python3 tests-e2e/run.py shell_
+      - name: Install current Bash for compatibility coverage
+        run: brew install bash
+      - name: Test current Bash prompt hooks and app integration
+        timeout-minutes: 3
+        run: |
+          export REWARP_TEST_BASH="$(brew --prefix bash)/bin/bash"
+          python3 Tests/ShellIntegration/test_bash_adapter.py
+          python3 tests-e2e/run.py shell_bash_

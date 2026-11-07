@@ -341,7 +341,7 @@ def text_origin(state):
 
 
 def test_plain_terminal_selection_copies_and_clears():
-    with App(shell="/bin/bash") as app:
+    with App(shell="/bin/bash", environment={"REWARP_SHELL_INTEGRATION": "none"}) as app:
         state = app.wait("bash", lambda s: s["display"] == "plain" and s["focus"] == "terminal", timeout=10)
         x, y = text_origin(state)
         y += 16  # bash's banner starts on the second row
@@ -353,7 +353,7 @@ def test_plain_terminal_selection_copies_and_clears():
 
 
 def test_a_shell_without_integration_stays_a_plain_terminal():
-    with App(shell="/bin/bash") as app:
+    with App(shell="/bin/bash", environment={"REWARP_SHELL_INTEGRATION": "none"}) as app:
         app.wait("bash", lambda s: s["display"] == "plain" and s["focus"] == "terminal", timeout=10)
         app.type(r"printf '\033]133;A\007\033]133;B\007\033]133;C;cmdline_url=fake\007'")
         app.key("return")

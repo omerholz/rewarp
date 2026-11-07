@@ -76,6 +76,7 @@ public enum ShellLaunch {
         if env["LANG"] == nil { env["LANG"] = "en_US.UTF-8" }
 
         var token: String?
+        var bootstrapHelper: String?
         let integrationRoot = env["REWARP_SHELL_INTEGRATION"] == "none" ? nil : integration
         if name == "zsh", let integration = integrationRoot, let helper = integrationHelper() {
             // The script restores this straight away, so the user's shell never
@@ -85,11 +86,33 @@ public enum ShellLaunch {
             env["REWARP_SHELL_HELPER"] = helper.path
             // Never in the environment. The shell asks for it through TokenHandoff.
             token = UUID().uuidString
+        } else if name == "bash", let integration = integrationRoot, let helper = integrationHelper() {
+            let script = integration.appendingPathComponent("bash/bootstrap.bash")
+            if FileManager.default.fileExists(atPath: script.path) {
+                for key in ["HISTCONTROL", "HISTFILE"] {
+                    if let existing = env[key] {
+                        env["REWARP_USER_\(key)"] = existing
+                        env["REWARP_USER_\(key)_SET"] = "1"
+                    }
+                }
+                // Hide the bootstrap from history and defer history-file loading
+                // until the user's profile has selected HISTFILE/HISTSIZE.
+                env["HISTCONTROL"] = "ignorespace"
+                env["HISTFILE"] = ""
+                env["REWARP_SHELL_INIT"] = script.path
+                env["REWARP_SHELL_HELPER"] = helper.path
+                token = UUID().uuidString
+                bootstrapHelper = helper.path
+            }
         }
 
         // A leading dash in argv[0] is how a shell learns it is a login shell.
-        return PTYProcess.Launch(path: shell, argv: ["-\(name)"], environment: env,
-                                 workingDirectory: workingDirectory, integrationToken: token)
+        let bootstrapsBash = name == "bash" && token != nil
+        let arguments = bootstrapsBash ? ["--noprofile", "-i"] : []
+        return PTYProcess.Launch(path: shell, argv: ["-\(name)"] + arguments, environment: env,
+                                 workingDirectory: workingDirectory, integrationToken: token,
+                                 integrationHelperPath: bootstrapHelper,
+                                 integrationBootstrap: bootstrapsBash ? " builtin source -- \"$REWARP_SHELL_INIT\"\n" : nil)
     }
 }
 
